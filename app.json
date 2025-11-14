@@ -15,15 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.oviya-buddy",
-      "infoPlist": {
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
-        "NSLocationAlwaysUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
-        "NSLocationWhenInUseUsageDescription": "Allow $(PRODUCT_NAME) to use your location.",
-        "UIBackgroundModes": [
-          "location"
-        ]
-      }
+      "bundleIdentifier": "app.rork.oviya-buddy"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,12 +24,7 @@
       },
       "package": "app.rork.oviya_buddy",
       "permissions": [
-        "android.permission.VIBRATE",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION"
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
@@ -51,16 +38,7 @@
         }
       ],
       "expo-font",
-      "expo-web-browser",
-      [
-        "expo-location",
-        {
-          "isAndroidForegroundServiceEnabled": true,
-          "isAndroidBackgroundLocationEnabled": true,
-          "isIosBackgroundLocationEnabled": true,
-          "locationAlwaysAndWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location."
-        }
-      ]
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true

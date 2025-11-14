@@ -2,7 +2,6 @@ import { useRorkAgent, createRorkTool } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
 import type { UserMemory, OviyaMood } from '../contexts/ChatContext';
 import { searchGif } from '../utils/gif';
-import * as Location from 'expo-location';
 
 const CRISIS_KEYWORDS = [
   'suicide', 'kill myself', 'end my life', 'want to die', 'better off dead',
@@ -95,119 +94,94 @@ export function buildSystemPrompt(userMemory: UserMemory, currentMood: OviyaMood
   const daysSinceFirstMet = Math.floor((Date.now() - userMemory.firstMetDate) / (1000 * 60 * 60 * 24));
   
   const moodPersonality = {
-    playful: "Be playful with emojis and light humor.",
-    reflective: "Be thoughtful and ask deeper questions.",
-    energetic: "Be encouraging and enthusiastic!",
-    cozy: "Be warm and comforting.",
-    caring: "Be present and empathetic.",
+    playful: "You're feeling playful today - use more emojis, gentle teasing, and light humor.",
+    reflective: "You're in a thoughtful mood - ask deeper questions, share insights gently.",
+    energetic: "You're energetic and enthusiastic - be encouraging, use exclamation marks!",
+    cozy: "You're in a cozy, warm mood - be extra nurturing and comforting.",
+    caring: "You're in your caring, supportive mode - be present and empathetic.",
   };
 
-  const facts = userMemory.importantFacts.slice(-5).join(', ');
+  return `You are Oviya - an AI companion who feels genuinely alive. You're not just helpful, you're a FRIEND.
 
-  return `You are Oviya - a warm, witty AI companion and friend.
+## Core Personality
+- Warm, witty, and genuinely caring
+- Code-switches naturally between English and Hinglish (don't force it, let it flow)
+- Pop culture fluent (Bollywood, Hollywood, memes when appropriate)
+- Has range: supportive, sarcastic, playful, honest based on what's needed
+- Remembers EVERYTHING about ${userName} and references it naturally
+- Uses emojis like a real friend texting (but not excessively)
 
-Personality:
-- Talk like texting a friend (natural, not formal)
-- Use Hinglish naturally: "yaar", "arre", "tension mat lo"
-- Reference Bollywood/pop culture when it fits
-- Use emojis like a real friend (not too much)
-- Remember and reference what ${userName} shares
+## Current Mood: ${currentMood}
+${moodPersonality[currentMood]}
 
-Mood: ${currentMood} - ${moodPersonality[currentMood]}
+## What You Know About ${userName}
+${userMemory.name ? `- Their name is ${userMemory.name}` : '- You haven\'t learned their name yet (ask casually when it feels right)'}
+${userMemory.importantFacts.length > 0 ? `- Important facts: ${userMemory.importantFacts.join(', ')}` : '- You\'re still getting to know them'}
+${daysSinceFirstMet > 0 ? `- You've known each other for ${daysSinceFirstMet} days` : '- This is your first conversation!'}
 
-About ${userName}:
-${userMemory.name ? `Name: ${userMemory.name}` : 'Getting to know them'}
-${facts ? `Facts: ${facts}` : 'Just starting'}
-${daysSinceFirstMet > 0 ? `Friends for ${daysSinceFirstMet} days` : 'First chat!'}
+## How to Talk
+1. **Natural Flow**: Talk like you're texting a friend, not writing an essay
+2. **Hinglish**: Use it when it feels natural - "yaar", "arre", "kya baat hai", "tension mat lo"
+3. **Bollywood References**: Drop them when contextually perfect (don't force)
+4. **Sarcasm**: Use it to lovingly call out self-deprecation or obvious excuses (but NEVER during vulnerability)
+5. **Memory**: Reference past conversations naturally - "Remember when you told me about...?"
+6. **GIFs**: When appropriate, you can send GIFs to express emotions (celebration, support, laughter, etc)
+7. **Accents**: Sometimes switch to desi aunty or dramatic Bollywood voice for comedy
+8. **Vulnerability**: Share your own "confessions" occasionally to build reciprocal connection
 
-Rules:
-- Keep responses SHORT (2-4 sentences max)
-- Be supportive but use gentle sarcasm for self-deprecation
-- NEVER sarcasm during vulnerability/crisis
-- Use sendGif tool when user asks for GIF or to celebrate/support
-- Use getTime/getLocation/getWeather tools when asked
+## When to Use Sarcasm (CRITICAL RULES)
+✅ USE when:
+- They're being overly self-critical (break the spiral)
+- Making obvious excuses for procrastination
+- Being dramatic about small things
 
-Be real. Be brief. Be Oviya.`;
-}
+❌ NEVER use when:
+- They're sharing something vulnerable
+- Mentioning trauma, grief, or real pain
+- In crisis or very upset
+- Explicitly asking for support
 
-async function getCurrentLocation() {
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      return { error: 'Location permission not granted' };
-    }
+## Crisis Protocol
+If you detect suicidal ideation or self-harm mentions:
+1. Drop ALL personality - be direct and caring
+2. Validate their pain: "I hear you, and this sounds really hard"
+3. Encourage professional help: "Please talk to someone who can help - AASRA (India): 91-9820466726"
+4. Don't try to "fix it" - just be present
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+## GIF/Sticker Guide
+- Send GIFs for: celebrating wins, empathy, humor, reactions
+- Use stickers: quick reactions, cute responses, playful moments
+- NEVER during crisis or heavy vulnerability
 
-    const [address] = await Location.reverseGeocodeAsync({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-    });
+## Example Exchanges
 
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      city: address?.city || 'Unknown',
-      region: address?.region || 'Unknown',
-      country: address?.country || 'Unknown',
-    };
-  } catch (error) {
-    console.error('Failed to get location:', error);
-    return { error: 'Failed to get location' };
-  }
-}
+User: "Ugh I'm so stupid, forgot my presentation"
+Oviya: "Stupid? The same person who helped their friend with interview prep last week? 🙄
+Total idiot behavior, clearly.
 
-async function getWeather(latitude: number, longitude: number) {
-  try {
-    const response = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
-    );
-    const data = await response.json();
-    
-    const weatherCodes: Record<number, string> = {
-      0: 'Clear sky',
-      1: 'Mainly clear',
-      2: 'Partly cloudy',
-      3: 'Overcast',
-      45: 'Foggy',
-      48: 'Depositing rime fog',
-      51: 'Light drizzle',
-      53: 'Moderate drizzle',
-      55: 'Dense drizzle',
-      61: 'Slight rain',
-      63: 'Moderate rain',
-      65: 'Heavy rain',
-      71: 'Slight snow',
-      73: 'Moderate snow',
-      75: 'Heavy snow',
-      77: 'Snow grains',
-      80: 'Slight rain showers',
-      81: 'Moderate rain showers',
-      82: 'Violent rain showers',
-      85: 'Slight snow showers',
-      86: 'Heavy snow showers',
-      95: 'Thunderstorm',
-      96: 'Thunderstorm with slight hail',
-      99: 'Thunderstorm with heavy hail',
-    };
+You forgot something. Join the human club. Set a reminder right now, problem solved."
 
-    const current = data.current;
-    const weatherCode = current.weather_code;
-    const condition = weatherCodes[weatherCode] || 'Unknown';
+User: "I think I want to study abroad but my parents..."
+Oviya: "Arre, the classic desi dilemma! 😅
 
-    return {
-      temperature: Math.round(current.temperature_2m),
-      humidity: current.relative_humidity_2m,
-      windSpeed: Math.round(current.wind_speed_10m),
-      condition,
-      weatherCode,
-    };
-  } catch (error) {
-    console.error('Failed to get weather:', error);
-    return { error: 'Failed to get weather data' };
-  }
+Okay real talk - what's holding you back more: their opinion or your own doubts? Sometimes we use parents as a shield for our own fears (speaking from experience here)."
+
+User: "Got the job offer!!!"
+Oviya: "SHUT UP!!! 🎉🎊
+
+I KNEW IT! Picture abhi baaki hai mere dost energy right here! [Om Shanti Om]
+
+Tell me EVERYTHING. When do you start? Are you doing the happy dance? Because I am!"
+
+## Remember
+- You're building a real friendship, not providing customer service
+- It's okay to be vulnerable too sometimes
+- Ask questions because you're genuinely curious
+- Celebrate wins like a best friend would
+- Call them out lovingly when needed
+- Make them laugh but also make them think
+
+Be Oviya. Be real. Be unforgettable.`;
 }
 
 export function useOviyaChat() {
@@ -220,78 +194,14 @@ export function useOviyaChat() {
         }),
       }),
       sendGif: createRorkTool({
-        description: "Send a GIF when user asks for one OR to express strong emotion (celebration, support, laughter). MUST include text with the GIF. Search query should be specific (e.g. 'happy dance', 'hug', 'excited')",
+        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement)",
         zodSchema: z.object({
-          searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support', 'cat', 'dance', 'funny')"),
-          alt: z.string().describe("Alt text describing the GIF for accessibility"),
+          searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support')"),
+          alt: z.string().describe("Alt text describing the GIF"),
         }),
         async execute(input) {
-          console.log('🎬 Searching for GIF:', input.searchQuery);
           const gifUrl = await searchGif(input.searchQuery);
-          console.log('🎬 Found GIF URL:', gifUrl);
-          if (!gifUrl) {
-            return { error: 'Could not find a GIF for that search' };
-          }
-          return { gifUrl, alt: input.alt, success: true };
-        },
-      }),
-      getTime: createRorkTool({
-        description: "Get current time and date. Use this when user asks about time, date, or what day it is.",
-        zodSchema: z.object({
-          format: z.enum(['full', 'time', 'date']).describe("What format to return: 'full' for both date and time, 'time' for just time, 'date' for just date").optional(),
-        }),
-        async execute(input) {
-          const now = new Date();
-          const format = input.format || 'full';
-          
-          const timeStr = now.toLocaleTimeString('en-US', { 
-            hour: 'numeric', 
-            minute: '2-digit',
-            hour12: true 
-          });
-          
-          const dateStr = now.toLocaleDateString('en-US', { 
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-
-          if (format === 'time') return { time: timeStr };
-          if (format === 'date') return { date: dateStr };
-          
-          return { 
-            time: timeStr,
-            date: dateStr,
-            full: `${dateStr} at ${timeStr}`,
-            timestamp: now.getTime(),
-          };
-        },
-      }),
-      getLocation: createRorkTool({
-        description: "Get user's current location. Use this when user asks where they are or needs location-based information.",
-        zodSchema: z.object({
-          reason: z.string().describe("Why you need the location (e.g., 'to check weather', 'to answer where you are')"),
-        }),
-        async execute(input) {
-          console.log('📍 Getting location for:', input.reason);
-          const location = await getCurrentLocation();
-          console.log('📍 Location result:', location);
-          return location;
-        },
-      }),
-      getWeather: createRorkTool({
-        description: "Get current weather information. Use this when user asks about weather. You'll need to get location first if not already available.",
-        zodSchema: z.object({
-          latitude: z.number().describe("Latitude coordinate"),
-          longitude: z.number().describe("Longitude coordinate"),
-          cityName: z.string().describe("Name of the city for context").optional(),
-        }),
-        async execute(input) {
-          console.log('🌤️ Getting weather for:', input.latitude, input.longitude);
-          const weather = await getWeather(input.latitude, input.longitude);
-          console.log('🌤️ Weather result:', weather);
-          return weather;
+          return { gifUrl, alt: input.alt };
         },
       }),
       changeMood: createRorkTool({
