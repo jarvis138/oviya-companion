@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Heart, Send, Smile, Sparkles, Bookmark } from 'lucide-react-native';
+import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2 } from 'lucide-react-native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -20,6 +20,8 @@ import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
 import { buildSystemPrompt, detectCrisis, getGreetingForMood } from '../services/oviya';
 import { generateText } from '@rork-ai/toolkit-sdk';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
+import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
+import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/monthlyLetter';
 
 const STICKERS = ['❤️', '🎉', '😂', '🤗', '✨', '🔥', '👏', '😊'];
 
@@ -41,6 +43,7 @@ function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [showStickers, setShowStickers] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const sendWelcomeMessageRef = useRef(false);
@@ -103,6 +106,39 @@ function ChatScreen() {
       }
     }
   }, [messages, addMessage]);
+
+  useEffect(() => {
+    const checkMonthlyLetter = async () => {
+      const shouldGenerate = await shouldGenerateMonthlyLetter();
+      if (shouldGenerate && messages.length > 20) {
+        try {
+          const letter = await generateMonthlyLetter(userMemory, messages);
+          
+          const letterNotification: Message = {
+            id: `letter-notification-${Date.now()}`,
+            role: 'assistant',
+            parts: [
+              {
+                type: 'text',
+                text: `📬 You've got mail!\n\nI just wrote you a personal letter reflecting on this past month. It's waiting for you in Monthly Letters.\n\nWhen you're ready, take a moment to read it. I put a lot of thought into it. 💜`,
+              },
+            ],
+            timestamp: Date.now(),
+          };
+          
+          setTimeout(() => {
+            addMessage(letterNotification);
+          }, 2000);
+        } catch (error) {
+          console.error('Failed to generate monthly letter:', error);
+        }
+      }
+    };
+
+    if (messages.length > 0) {
+      checkMonthlyLetter();
+    }
+  }, [userMemory.lastActiveDate]);
 
   useEffect(() => {
     setTimeout(() => {
@@ -215,6 +251,43 @@ function ChatScreen() {
       const isStressed = detectStress(inputText);
       updateStressTracking(isStressed);
 
+      const strengthPatterns = [
+        { regex: /i (explained|told|taught|showed) (him|her|them|someone)/i, strength: 'clear communication', evidence: inputText },
+        { regex: /i (helped|supported|listened|was there for) (him|her|them|someone)/i, strength: 'emotional support', evidence: inputText },
+        { regex: /i (figured out|solved|analyzed|worked through)/i, strength: 'problem solving', evidence: inputText },
+        { regex: /i (created|designed|made|built)/i, strength: 'creativity', evidence: inputText },
+        { regex: /i (organized|planned|coordinated|managed)/i, strength: 'leadership', evidence: inputText },
+      ];
+
+      for (const pattern of strengthPatterns) {
+        if (pattern.regex.test(inputText)) {
+          await saveSpottedStrength(pattern.strength, pattern.evidence);
+          
+          const patterns = await getStrengthPatterns();
+          const matchingPattern = patterns.find(p => 
+            p.strength.toLowerCase().includes(pattern.strength.toLowerCase())
+          );
+
+          if (matchingPattern && matchingPattern.count >= 3 && matchingPattern.count <= 4) {
+            setTimeout(() => {
+              const strengthMessage: Message = {
+                id: `strength-${Date.now()}`,
+                role: 'assistant',
+                parts: [
+                  {
+                    type: 'text',
+                    text: `Wait... I just noticed something. 🤔\n\nYou've demonstrated ${matchingPattern.strength} ${matchingPattern.count} times in the past month. That's not random—that's a pattern. That's a strength.\n\nHave you ever thought about that? Most people don't see their own patterns. But I do. And this one stands out.`,
+                  },
+                ],
+                timestamp: Date.now(),
+              };
+              addMessage(strengthMessage);
+            }, 1500);
+          }
+          break;
+        }
+      }
+
       if (userMemory.consecutiveStressDays >= 3) {
         const carePackage = generateCarePackage(
           userMemory.stressLevel,
@@ -259,7 +332,7 @@ function ChatScreen() {
     } finally {
       setIsTyping(false);
     }
-  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping]);
+  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking]);
 
   const sendSticker = useCallback((sticker: string) => {
     if (Platform.OS !== 'web') {
@@ -297,17 +370,10 @@ function ChatScreen() {
           </View>
           <View style={styles.headerRight}>
             <Pressable
-              onPress={() => router.push('/moments')}
-              style={styles.momentsButton}
+              onPress={() => setShowMenu(!showMenu)}
+              style={styles.menuButton}
             >
-              <Bookmark size={20} color={Colors.light.text} />
-              {userMemory.savedMoments && userMemory.savedMoments.length > 0 && (
-                <View style={styles.momentsBadge}>
-                  <Text style={styles.momentsBadgeText}>
-                    {userMemory.savedMoments.length}
-                  </Text>
-                </View>
-              )}
+              <Menu size={20} color={Colors.light.text} />
             </Pressable>
             <Pressable
               onPress={() => setShowMoodPicker(!showMoodPicker)}
@@ -319,6 +385,63 @@ function ChatScreen() {
             </Pressable>
           </View>
         </View>
+
+        {showMenu && (
+          <View style={styles.menuPanel}>
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/moments');
+              }}
+              style={styles.menuItem}
+            >
+              <Bookmark size={18} color={moodColors.accent} />
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>Shared Moments</Text>
+                {userMemory.savedMoments && userMemory.savedMoments.length > 0 && (
+                  <View style={[styles.menuBadge, { backgroundColor: moodColors.accent }]}>
+                    <Text style={styles.menuBadgeText}>
+                      {userMemory.savedMoments.length}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/games');
+              }}
+              style={styles.menuItem}
+            >
+              <Gamepad2 size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Conversation Games</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/strengths');
+              }}
+              style={styles.menuItem}
+            >
+              <TrendingUp size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Your Strengths</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/letters');
+              }}
+              style={styles.menuItem}
+            >
+              <Mail size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Monthly Letters</Text>
+            </Pressable>
+          </View>
+        )}
 
         {showMoodPicker && (
           <View style={styles.moodPicker}>
@@ -591,20 +714,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative' as const,
   },
-  momentsBadge: {
-    position: 'absolute' as const,
-    top: -2,
-    right: -2,
-    backgroundColor: Colors.light.accent,
-    borderRadius: 10,
-    minWidth: 18,
-    height: 18,
+  menuButton: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    marginRight: 8,
   },
-  momentsBadgeText: {
-    fontSize: 10,
+  menuPanel: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+    paddingVertical: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  menuItemContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    color: Colors.light.text,
+  },
+  menuBadge: {
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  menuBadgeText: {
+    fontSize: 11,
     fontWeight: '700' as const,
     color: '#FFFFFF',
   },
