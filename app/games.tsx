@@ -20,7 +20,7 @@ export default function GamesScreen() {
   const { currentMood, addMessage } = useChat();
   const [selectedCategory, setSelectedCategory] = useState<'all' | ConversationGame['category']>('all');
 
-  const moodColors = getColorsForMood(currentMood);
+  const moodColors = getColorsForMood(currentMood || 'caring');
 
   const categories: { key: 'all' | ConversationGame['category']; label: string; emoji: string }[] = [
     { key: 'all', label: 'All', emoji: '✨' },

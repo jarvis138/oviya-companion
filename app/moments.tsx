@@ -18,10 +18,11 @@ export default function MomentsScreen() {
   const { messages, userMemory, currentMood } = useChat();
 
   const savedMomentMessages = useMemo(() => {
-    return messages.filter(msg => userMemory.savedMoments.includes(msg.id));
-  }, [messages, userMemory.savedMoments]);
+    if (!messages || !userMemory) return [];
+    return messages.filter(msg => userMemory.savedMoments?.includes(msg.id));
+  }, [messages, userMemory]);
 
-  const moodColors = getColorsForMood(currentMood);
+  const moodColors = getColorsForMood(currentMood || 'caring');
 
   const renderMoment = ({ item, index }: { item: typeof messages[0]; index: number }) => {
     return (

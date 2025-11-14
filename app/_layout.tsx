@@ -18,6 +18,7 @@ function RootLayoutNav() {
       <Stack.Screen name="games" options={{ headerShown: false }} />
       <Stack.Screen name="strengths" options={{ headerShown: false }} />
       <Stack.Screen name="letters" options={{ headerShown: false }} />
+      <Stack.Screen name="movies" options={{ headerShown: false }} />
     </Stack>
   );
 }

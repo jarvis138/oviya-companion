@@ -29,7 +29,7 @@ export default function LettersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLetter, setSelectedLetter] = useState<MonthlyLetter | null>(null);
 
-  const moodColors = getColorsForMood(currentMood);
+  const moodColors = getColorsForMood(currentMood || 'caring');
 
   useEffect(() => {
     loadLetters();

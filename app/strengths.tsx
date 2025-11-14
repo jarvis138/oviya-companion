@@ -25,7 +25,7 @@ export default function StrengthsScreen() {
   const [patterns, setPatterns] = useState<StrengthPattern[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const moodColors = getColorsForMood(currentMood);
+  const moodColors = getColorsForMood(currentMood || 'caring');
 
   useEffect(() => {
     loadStrengthPatterns();
