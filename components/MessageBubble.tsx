@@ -156,9 +156,9 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   messageContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    maxWidth: '80%',
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    maxWidth: '75%',
   },
   oviyaContainer: {
     alignSelf: 'flex-start',
@@ -167,15 +167,17 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   oviyaBubble: {
-    backgroundColor: Colors.light.oviyaBubble,
+    backgroundColor: '#FFFFFF',
     borderRadius: 20,
     borderTopLeftRadius: 4,
-    padding: 14,
-    shadowColor: '#FF6B9D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   userBubble: {
     borderRadius: 20,
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   oviyaText: {
     color: Colors.light.text,
