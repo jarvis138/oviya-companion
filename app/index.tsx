@@ -46,6 +46,7 @@ function ChatScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const lastProcessedAgentMessageRef = useRef<string | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const sendWelcomeMessageRef = useRef(false);
 
@@ -191,12 +192,16 @@ function ChatScreen() {
 
       const messageParts: Message['parts'] = [];
       let hasTextContent = false;
+      let isComplete = false;
 
       for (const part of lastAgentMessage.parts) {
         console.log('🔹 Processing part:', part.type, part);
         if (part.type === 'text') {
-          hasTextContent = true;
-          messageParts.push({ type: 'text', text: part.text });
+          if (part.text && part.text.trim().length > 0) {
+            hasTextContent = true;
+            messageParts.push({ type: 'text', text: part.text });
+            isComplete = true;
+          }
         } else if (part.type === 'tool') {
           if (part.state === 'output-available') {
             const output = part.output as any;
@@ -211,20 +216,23 @@ function ChatScreen() {
               });
             }
 
-            if (part.toolName === 'changeMood') {
+            if (part.toolName === 'changeMood' && output.mood) {
               changeMood(output.mood);
             }
 
-            if (part.toolName === 'rememberFact') {
+            if (part.toolName === 'rememberFact' && output.fact) {
               addToMemory(output.fact);
             }
+          } else if (part.state === 'output-error') {
+            console.log('🔴 Tool error:', part.toolName, part);
+            isComplete = true;
           }
         }
       }
 
-      console.log('📝 Message parts collected:', messageParts.length, 'hasText:', hasTextContent);
+      console.log('📝 Message parts collected:', messageParts.length, 'hasText:', hasTextContent, 'isComplete:', isComplete);
 
-      if (messageParts.length > 0) {
+      if (messageParts.length > 0 && isComplete) {
         const oviyaMessage: Message = {
           id: `agent-${lastAgentMessage.id}`,
           role: 'assistant',
@@ -233,10 +241,16 @@ function ChatScreen() {
         };
 
         console.log('✅ Adding message to chat:', oviyaMessage);
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
         setIsTyping(false);
         addMessage(oviyaMessage);
-      } else {
+      } else if (isComplete && messageParts.length === 0) {
         console.log('⚠️ No message parts to display, stopping typing indicator');
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
         setIsTyping(false);
       }
     }
@@ -262,6 +276,27 @@ function ChatScreen() {
 
     setIsTyping(true);
 
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      console.log('⏱️ Response timeout - stopping typing indicator');
+      setIsTyping(false);
+      const timeoutMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: "Oops, I'm taking too long to respond 😅 Can you try again?",
+          },
+        ],
+        timestamp: Date.now(),
+      };
+      addMessage(timeoutMessage);
+    }, 30000);
+
     try {
       const systemPrompt = buildSystemPrompt(userMemory, currentMood);
 
@@ -276,9 +311,11 @@ function ChatScreen() {
       const delay = simulateTypingDelay(userInput);
       await new Promise(resolve => setTimeout(resolve, delay));
 
+      console.log('📤 Sending message to agent...');
       await sendMessage({
         text: `${systemPrompt}\n\n---\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\n---\n\nUser: ${userInput}`,
       });
+      console.log('📥 Agent sendMessage completed');
 
       if (userInput.toLowerCase().includes('my name is ')) {
         const nameMatch = userInput.match(/my name is (\w+)/i);
@@ -363,7 +400,11 @@ function ChatScreen() {
       }
 
     } catch (error) {
-      console.error('Error getting response:', error);
+      console.error('❌ Error getting response:', error);
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -377,8 +418,8 @@ function ChatScreen() {
         timestamp: Date.now(),
       };
 
-      addMessage(errorMessage);
       setIsTyping(false);
+      addMessage(errorMessage);
     }
   }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking, sendMessage]);
 
