@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
-import { buildSystemPrompt, detectCrisis, getGreetingForMood } from '../services/oviya';
+import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks } from '../services/oviya';
 import { generateText } from '@rork-ai/toolkit-sdk';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
 import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
@@ -207,26 +207,64 @@ function ChatScreen() {
 
   const sendWelcomeMessage = async () => {
     setIsTyping(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const greeting = getGreetingForMood(currentMood);
-    const introText = messages.length === 0 && userMemory.importantFacts.length === 0
-      ? `\n\nI'm Oviya. Think of me as that friend who actually remembers everything you tell them (in a non-creepy way, promise 😄).\n\nWhat's on your mind today?`
-      : '';
-
-    const welcomeMessage: Message = {
+    
+    const greetingMessage: Message = {
       id: Date.now().toString(),
       role: 'assistant',
       parts: [
         {
           type: 'text',
-          text: greeting + introText,
+          text: greeting,
         },
       ],
       timestamp: Date.now(),
     };
 
-    addMessage(welcomeMessage);
+    addMessage(greetingMessage);
+
+    if (messages.length === 0 && userMemory.importantFacts.length === 0) {
+      setIsTyping(false);
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setIsTyping(true);
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      const introMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: "I'm Oviya. Think of me as that friend who actually remembers everything you tell them (in a non-creepy way, promise 😄).",
+          },
+        ],
+        timestamp: Date.now(),
+      };
+
+      addMessage(introMessage);
+      
+      setIsTyping(false);
+      await new Promise(resolve => setTimeout(resolve, 400));
+      setIsTyping(true);
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const questionMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        parts: [
+          {
+            type: 'text',
+            text: "What's on your mind today?",
+          },
+        ],
+        timestamp: Date.now(),
+      };
+
+      addMessage(questionMessage);
+    }
+
     setIsTyping(false);
   };
 
@@ -281,23 +319,50 @@ function ChatScreen() {
         ],
       });
 
-      const oviyaMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        parts: [{ type: 'text', text: response }],
-        timestamp: Date.now(),
-      };
+      const chunks = splitIntoChunks(response);
+      console.log(`[ChatScreen] Split response into ${chunks.length} chunks`);
 
-      addMessage(oviyaMessage);
+      if (chunks.length === 1) {
+        const oviyaMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          parts: [{ type: 'text', text: response }],
+          timestamp: Date.now(),
+        };
+        addMessage(oviyaMessage);
+      } else {
+        for (let i = 0; i < chunks.length; i++) {
+          if (i > 0) {
+            setIsTyping(true);
+            const chunkDelay = 800 + Math.min(chunks[i].length * 20, 2000);
+            await new Promise(resolve => setTimeout(resolve, chunkDelay));
+          }
 
-      const shouldReact = shouldOviyaReact(inputText, response);
+          const chunkMessage: Message = {
+            id: `${Date.now()}-chunk-${i}`,
+            role: 'assistant',
+            parts: [{ type: 'text', text: chunks[i] }],
+            timestamp: Date.now(),
+          };
+          addMessage(chunkMessage);
+
+          if (i < chunks.length - 1) {
+            setIsTyping(false);
+            await new Promise(resolve => setTimeout(resolve, 300));
+          }
+        }
+      }
+
+      const fullResponse = chunks.join(' ');
+      const shouldReact = shouldOviyaReact(inputText, fullResponse);
       if (shouldReact.shouldReact) {
+        const reactionDelay = chunks.length > 1 ? 1500 : 1000;
         setTimeout(() => {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
           addReaction(userMessage.id, shouldReact.emoji!);
-        }, 1000);
+        }, reactionDelay);
       }
 
       if (inputText.toLowerCase().includes('my name is ')) {
