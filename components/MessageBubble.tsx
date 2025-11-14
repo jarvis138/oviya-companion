@@ -85,40 +85,56 @@ export default function MessageBubble({ message, isLatest }: Props) {
     }
   };
 
+  const hasReactions = message.reactions && message.reactions.length > 0;
+
   return (
-    <Pressable
-      onLongPress={handleLongPress}
-      delayLongPress={500}
-      style={[
-        styles.messageContainer,
-        isOviya ? styles.oviyaContainer : styles.userContainer,
-      ]}
-    >
-      {isOviya ? (
-        <View style={styles.oviyaBubble}>
-          {message.parts.map((part, index) => renderPart(part, index))}
-          {isSaved && (
-            <View style={styles.savedBadge}>
-              <Bookmark size={12} color={Colors.light.accent} fill={Colors.light.accent} />
+    <View style={styles.messageWrapper}>
+      <Pressable
+        onLongPress={handleLongPress}
+        delayLongPress={500}
+        style={[
+          styles.messageContainer,
+          isOviya ? styles.oviyaContainer : styles.userContainer,
+        ]}
+      >
+        {isOviya ? (
+          <View style={styles.oviyaBubble}>
+            {message.parts.map((part, index) => renderPart(part, index))}
+            {isSaved && (
+              <View style={styles.savedBadge}>
+                <Bookmark size={12} color={Colors.light.accent} fill={Colors.light.accent} />
+              </View>
+            )}
+          </View>
+        ) : (
+          <LinearGradient
+            colors={['#4A90E2', '#357ABD']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.userBubble}
+          >
+            {message.parts.map((part, index) => renderPart(part, index))}
+            {isSaved && (
+              <View style={styles.savedBadge}>
+                <Bookmark size={12} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            )}
+          </LinearGradient>
+        )}
+      </Pressable>
+      {hasReactions && (
+        <View style={[
+          styles.reactionsContainer,
+          isOviya ? styles.reactionsLeft : styles.reactionsRight,
+        ]}>
+          {message.reactions?.map((reaction, index) => (
+            <View key={`${reaction.timestamp}-${index}`} style={styles.reactionBubble}>
+              <Text style={styles.reactionEmoji}>{reaction.emoji}</Text>
             </View>
-          )}
+          ))}
         </View>
-      ) : (
-        <LinearGradient
-          colors={['#4A90E2', '#357ABD']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.userBubble}
-        >
-          {message.parts.map((part, index) => renderPart(part, index))}
-          {isSaved && (
-            <View style={styles.savedBadge}>
-              <Bookmark size={12} color="#FFFFFF" fill="#FFFFFF" />
-            </View>
-          )}
-        </LinearGradient>
       )}
-    </Pressable>
+    </View>
   );
 }
 
@@ -136,6 +152,9 @@ export function TypingIndicator() {
 }
 
 const styles = StyleSheet.create({
+  messageWrapper: {
+    width: '100%',
+  },
   messageContainer: {
     paddingHorizontal: 16,
     paddingVertical: 4,
@@ -214,5 +233,37 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  reactionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: -4,
+    marginBottom: 4,
+    paddingHorizontal: 16,
+  },
+  reactionsLeft: {
+    alignSelf: 'flex-start',
+    marginLeft: 20,
+  },
+  reactionsRight: {
+    alignSelf: 'flex-end',
+    marginRight: 20,
+  },
+  reactionBubble: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  reactionEmoji: {
+    fontSize: 16,
   },
 });

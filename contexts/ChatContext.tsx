@@ -22,11 +22,17 @@ export type StickerPart = {
 
 export type MessagePart = TextPart | GifPart | StickerPart;
 
+export type Reaction = {
+  emoji: string;
+  timestamp: number;
+};
+
 export type Message = {
   id: string;
   role: MessageRole;
   parts: MessagePart[];
   timestamp: number;
+  reactions?: Reaction[];
 };
 
 export type UserMemory = {
@@ -217,6 +223,23 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     });
   }, [saveMemory]);
 
+  const addReaction = useCallback((messageId: string, emoji: string) => {
+    setMessages(prev => {
+      const updated = prev.map(msg => {
+        if (msg.id === messageId) {
+          const reactions = msg.reactions || [];
+          return {
+            ...msg,
+            reactions: [...reactions, { emoji, timestamp: Date.now() }],
+          };
+        }
+        return msg;
+      });
+      saveMessages(updated);
+      return updated;
+    });
+  }, [saveMessages]);
+
   return {
     messages,
     userMemory,
@@ -231,5 +254,6 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     detectStress,
     updateStressTracking,
     saveMoment,
+    addReaction,
   };
 });

@@ -25,6 +25,51 @@ import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/mon
 
 const STICKERS = ['❤️', '🎉', '😂', '🤗', '✨', '🔥', '👏', '😊'];
 
+function shouldOviyaReact(userMessage: string, oviyaResponse: string): { shouldReact: boolean; emoji?: string } {
+  const lower = userMessage.toLowerCase();
+  
+  const excitementPatterns = [
+    { regex: /(got|passed|cleared|accepted|selected|won|achieved).*?(job|offer|exam|test|interview|promotion|award)/i, emoji: '🎉' },
+    { regex: /(celebrate|happy|excited|amazing|great news|good news)/i, emoji: '🎉' },
+  ];
+  
+  const accomplishmentPatterns = [
+    { regex: /(finally|completed|finished|did it|made it|success)/i, emoji: '🔥' },
+    { regex: /(proud of|accomplished|achieved)/i, emoji: '👏' },
+  ];
+  
+  const loveGratitudePatterns = [
+    { regex: /(love you|thank you|grateful|appreciate|thanks oviya)/i, emoji: '❤️' },
+    { regex: /(you're|you are).*(best|amazing|awesome|great|helpful)/i, emoji: '🤗' },
+  ];
+  
+  const funnyPatterns = [
+    { regex: /(lol|haha|lmao|😂|funny|hilarious)/i, emoji: '😂' },
+    { regex: oviyaResponse.includes('😂') || oviyaResponse.includes('🤣') || oviyaResponse.includes('lol'), emoji: '😂' },
+  ];
+  
+  const wholesomePatterns = [
+    { regex: /(feeling better|much better|that helped|feel good)/i, emoji: '✨' },
+    { regex: /(exactly|spot on|you get me|understand me)/i, emoji: '✨' },
+  ];
+  
+  const allPatterns = [
+    ...excitementPatterns,
+    ...accomplishmentPatterns,
+    ...loveGratitudePatterns,
+    ...funnyPatterns,
+    ...wholesomePatterns,
+  ];
+  
+  for (const pattern of allPatterns) {
+    if (typeof pattern.regex === 'boolean' ? pattern.regex : pattern.regex.test(lower)) {
+      return { shouldReact: true, emoji: pattern.emoji };
+    }
+  }
+  
+  return { shouldReact: false };
+}
+
 function ChatScreen() {
   const {
     messages,
@@ -38,6 +83,7 @@ function ChatScreen() {
     detectStress,
     updateStressTracking,
     changeMood,
+    addReaction,
   } = useChat();
 
   const [inputText, setInputText] = useState('');
@@ -230,6 +276,16 @@ function ChatScreen() {
       };
 
       addMessage(oviyaMessage);
+
+      const shouldReact = shouldOviyaReact(inputText, response);
+      if (shouldReact.shouldReact) {
+        setTimeout(() => {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          addReaction(userMessage.id, shouldReact.emoji!);
+        }, 1000);
+      }
 
       if (inputText.toLowerCase().includes('my name is ')) {
         const nameMatch = inputText.match(/my name is (\w+)/i);
