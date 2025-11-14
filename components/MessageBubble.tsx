@@ -1,12 +1,12 @@
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Bookmark } from 'lucide-react-native';
 import React from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Message, MessagePart } from '../contexts/ChatContext';
 import { useChat } from '../contexts/ChatContext';
-import Colors from '../constants/colors';
+import Colors, { getColorsForMood } from '../constants/colors';
 
 type Props = {
   message: Message;
@@ -14,9 +14,10 @@ type Props = {
 };
 
 export default function MessageBubble({ message, isLatest }: Props) {
-  const { userMemory, saveMoment } = useChat();
+  const { userMemory, saveMoment, currentMood } = useChat();
   const isOviya = message.role === 'assistant';
   const isSaved = userMemory?.savedMoments?.includes(message.id) ?? false;
+  const moodColors = getColorsForMood(currentMood);
 
   const handleLongPress = () => {
     if (Platform.OS !== 'web') {
@@ -95,28 +96,27 @@ export default function MessageBubble({ message, isLatest }: Props) {
       ]}
     >
       {isOviya ? (
-        <View style={styles.oviyaBubble}>
-          {message.parts.map((part, index) => renderPart(part, index))}
-          {isSaved && (
-            <View style={styles.savedBadge}>
-              <Bookmark size={12} color={Colors.light.accent} fill={Colors.light.accent} />
-            </View>
-          )}
-        </View>
+        <BlurView intensity={20} tint="light" style={styles.oviyaBubble}>
+          <View style={styles.bubbleContent}>
+            {message.parts.map((part, index) => renderPart(part, index))}
+            {isSaved && (
+              <View style={styles.savedBadge}>
+                <Bookmark size={12} color={moodColors.accent} fill={moodColors.accent} />
+              </View>
+            )}
+          </View>
+        </BlurView>
       ) : (
-        <LinearGradient
-          colors={['#4A90E2', '#357ABD']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.userBubble}
-        >
-          {message.parts.map((part, index) => renderPart(part, index))}
-          {isSaved && (
-            <View style={styles.savedBadge}>
-              <Bookmark size={12} color="#FFFFFF" fill="#FFFFFF" />
-            </View>
-          )}
-        </LinearGradient>
+        <BlurView intensity={30} tint="light" style={styles.userBubble}>
+          <View style={[styles.bubbleContent, styles.userBubbleContent, { backgroundColor: moodColors.accent }]}>
+            {message.parts.map((part, index) => renderPart(part, index))}
+            {isSaved && (
+              <View style={styles.savedBadge}>
+                <Bookmark size={12} color="#FFFFFF" fill="#FFFFFF" />
+              </View>
+            )}
+          </View>
+        </BlurView>
       )}
     </Pressable>
   );
@@ -125,12 +125,14 @@ export default function MessageBubble({ message, isLatest }: Props) {
 export function TypingIndicator() {
   return (
     <View style={[styles.messageContainer, styles.oviyaContainer]}>
-      <View style={styles.oviyaBubble}>
-        <View style={styles.typingContainer}>
-          <ActivityIndicator size="small" color={Colors.light.accent} />
-          <Text style={styles.typingText}>Oviya is typing...</Text>
+      <BlurView intensity={20} tint="light" style={styles.oviyaBubble}>
+        <View style={styles.bubbleContent}>
+          <View style={styles.typingContainer}>
+            <ActivityIndicator size="small" color={Colors.light.accent} />
+            <Text style={styles.typingText}>Oviya is typing...</Text>
+          </View>
         </View>
-      </View>
+      </BlurView>
     </View>
   );
 }
@@ -138,8 +140,8 @@ export function TypingIndicator() {
 const styles = StyleSheet.create({
   messageContainer: {
     paddingHorizontal: 16,
-    paddingVertical: 4,
-    maxWidth: '80%',
+    paddingVertical: 6,
+    maxWidth: '75%',
   },
   oviyaContainer: {
     alignSelf: 'flex-start',
@@ -148,28 +150,29 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   oviyaBubble: {
-    backgroundColor: Colors.light.oviyaBubble,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
     borderRadius: 20,
     borderTopLeftRadius: 4,
-    padding: 14,
-    shadowColor: '#FF6B9D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
   },
   userBubble: {
     borderRadius: 20,
     borderTopRightRadius: 4,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 3,
+    overflow: 'hidden' as const,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  bubbleContent: {
+    padding: 16,
+    position: 'relative' as const,
+  },
+  userBubbleContent: {
+    borderRadius: 20,
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 15,
     lineHeight: 22,
   },
   oviyaText: {
@@ -181,7 +184,7 @@ const styles = StyleSheet.create({
   gifContainer: {
     marginTop: 8,
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: 'hidden' as const,
   },
   gif: {
     width: 200,
@@ -190,11 +193,11 @@ const styles = StyleSheet.create({
   },
   sticker: {
     fontSize: 48,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   typingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 8,
   },
   typingText: {
@@ -204,15 +207,15 @@ const styles = StyleSheet.create({
   },
   savedBadge: {
     position: 'absolute' as const,
-    top: 4,
-    right: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 10,
     padding: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 4,
     elevation: 2,
   },
 });
