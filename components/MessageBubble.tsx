@@ -8,6 +8,42 @@ import type { Message, MessagePart } from '../contexts/ChatContext';
 import { useChat } from '../contexts/ChatContext';
 import Colors from '../constants/colors';
 
+type TextSegment = {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+};
+
+function parseMarkdown(text: string): TextSegment[] {
+  const segments: TextSegment[] = [];
+  let currentIndex = 0;
+
+  const boldItalicRegex = /\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = boldItalicRegex.exec(text)) !== null) {
+    if (match.index > currentIndex) {
+      segments.push({ text: text.slice(currentIndex, match.index) });
+    }
+
+    if (match[1]) {
+      segments.push({ text: match[1], bold: true, italic: true });
+    } else if (match[2]) {
+      segments.push({ text: match[2], bold: true });
+    } else if (match[3]) {
+      segments.push({ text: match[3], italic: true });
+    }
+
+    currentIndex = match.index + match[0].length;
+  }
+
+  if (currentIndex < text.length) {
+    segments.push({ text: text.slice(currentIndex) });
+  }
+
+  return segments.length > 0 ? segments : [{ text }];
+}
+
 type Props = {
   message: Message;
   isLatest: boolean;
@@ -49,6 +85,7 @@ export default function MessageBubble({ message, isLatest }: Props) {
   const renderPart = (part: MessagePart, index: number) => {
     switch (part.type) {
       case 'text':
+        const segments = parseMarkdown(part.text);
         return (
           <Text
             key={index}
@@ -57,7 +94,17 @@ export default function MessageBubble({ message, isLatest }: Props) {
               isOviya ? styles.oviyaText : styles.userText,
             ]}
           >
-            {part.text}
+            {segments.map((segment, i) => (
+              <Text
+                key={i}
+                style={[
+                  segment.bold && styles.boldText,
+                  segment.italic && styles.italicText,
+                ]}
+              >
+                {segment.text}
+              </Text>
+            ))}
           </Text>
         );
 
@@ -265,5 +312,11 @@ const styles = StyleSheet.create({
   },
   reactionEmoji: {
     fontSize: 16,
+  },
+  boldText: {
+    fontWeight: '700' as const,
+  },
+  italicText: {
+    fontStyle: 'italic' as const,
   },
 });
