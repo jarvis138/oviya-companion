@@ -275,7 +275,7 @@ export function useOviyaChat() {
         }),
       }),
       sendGif: createRorkTool({
-        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). Always use this when the user asks for a GIF or when you want to express strong emotion visually.",
+        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). IMPORTANT: When you use this tool, you MUST also include a text message to accompany the GIF. Always use this when the user asks for a GIF or when you want to express strong emotion visually.",
         zodSchema: z.object({
           searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support', 'cat', 'dance', 'funny')"),
           alt: z.string().describe("Alt text describing the GIF for accessibility"),

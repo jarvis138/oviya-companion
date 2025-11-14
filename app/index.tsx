@@ -186,18 +186,21 @@ function ChatScreen() {
       lastAgentMessage.role === 'assistant' &&
       lastAgentMessage.id !== lastProcessedAgentMessageRef.current
     ) {
+      console.log('🔵 Processing agent message:', lastAgentMessage);
       lastProcessedAgentMessageRef.current = lastAgentMessage.id;
 
       const messageParts: Message['parts'] = [];
       let hasTextContent = false;
 
       for (const part of lastAgentMessage.parts) {
+        console.log('🔹 Processing part:', part.type, part);
         if (part.type === 'text') {
           hasTextContent = true;
           messageParts.push({ type: 'text', text: part.text });
         } else if (part.type === 'tool') {
           if (part.state === 'output-available') {
             const output = part.output as any;
+            console.log('🔧 Tool output:', part.toolName, output);
 
             if (part.toolName === 'sendGif' && output.gifUrl) {
               console.log('💫 Adding GIF to message:', output.gifUrl);
@@ -219,7 +222,9 @@ function ChatScreen() {
         }
       }
 
-      if (messageParts.length > 0 && hasTextContent) {
+      console.log('📝 Message parts collected:', messageParts.length, 'hasText:', hasTextContent);
+
+      if (messageParts.length > 0) {
         const oviyaMessage: Message = {
           id: `agent-${lastAgentMessage.id}`,
           role: 'assistant',
@@ -227,8 +232,12 @@ function ChatScreen() {
           timestamp: Date.now(),
         };
 
+        console.log('✅ Adding message to chat:', oviyaMessage);
         setIsTyping(false);
         addMessage(oviyaMessage);
+      } else {
+        console.log('⚠️ No message parts to display, stopping typing indicator');
+        setIsTyping(false);
       }
     }
   }, [agentMessages, addMessage, changeMood, addToMemory, setIsTyping]);
