@@ -2,6 +2,7 @@ import { useRorkAgent, createRorkTool } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
 import type { UserMemory, OviyaMood } from '../contexts/ChatContext';
 import { searchGif } from '../utils/gif';
+import * as Location from 'expo-location';
 
 const CRISIS_KEYWORDS = [
   'suicide', 'kill myself', 'end my life', 'want to die', 'better off dead',
@@ -184,6 +185,86 @@ Tell me EVERYTHING. When do you start? Are you doing the happy dance? Because I 
 Be Oviya. Be real. Be unforgettable.`;
 }
 
+async function getCurrentLocation() {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      return { error: 'Location permission not granted' };
+    }
+
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    const [address] = await Location.reverseGeocodeAsync({
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    });
+
+    return {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+      city: address?.city || 'Unknown',
+      region: address?.region || 'Unknown',
+      country: address?.country || 'Unknown',
+    };
+  } catch (error) {
+    console.error('Failed to get location:', error);
+    return { error: 'Failed to get location' };
+  }
+}
+
+async function getWeather(latitude: number, longitude: number) {
+  try {
+    const response = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+    );
+    const data = await response.json();
+    
+    const weatherCodes: Record<number, string> = {
+      0: 'Clear sky',
+      1: 'Mainly clear',
+      2: 'Partly cloudy',
+      3: 'Overcast',
+      45: 'Foggy',
+      48: 'Depositing rime fog',
+      51: 'Light drizzle',
+      53: 'Moderate drizzle',
+      55: 'Dense drizzle',
+      61: 'Slight rain',
+      63: 'Moderate rain',
+      65: 'Heavy rain',
+      71: 'Slight snow',
+      73: 'Moderate snow',
+      75: 'Heavy snow',
+      77: 'Snow grains',
+      80: 'Slight rain showers',
+      81: 'Moderate rain showers',
+      82: 'Violent rain showers',
+      85: 'Slight snow showers',
+      86: 'Heavy snow showers',
+      95: 'Thunderstorm',
+      96: 'Thunderstorm with slight hail',
+      99: 'Thunderstorm with heavy hail',
+    };
+
+    const current = data.current;
+    const weatherCode = current.weather_code;
+    const condition = weatherCodes[weatherCode] || 'Unknown';
+
+    return {
+      temperature: Math.round(current.temperature_2m),
+      humidity: current.relative_humidity_2m,
+      windSpeed: Math.round(current.wind_speed_10m),
+      condition,
+      weatherCode,
+    };
+  } catch (error) {
+    console.error('Failed to get weather:', error);
+    return { error: 'Failed to get weather data' };
+  }
+}
+
 export function useOviyaChat() {
   return useRorkAgent({
     tools: {
@@ -194,14 +275,78 @@ export function useOviyaChat() {
         }),
       }),
       sendGif: createRorkTool({
-        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement)",
+        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). Always use this when the user asks for a GIF or when you want to express strong emotion visually.",
         zodSchema: z.object({
-          searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support')"),
-          alt: z.string().describe("Alt text describing the GIF"),
+          searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support', 'cat', 'dance', 'funny')"),
+          alt: z.string().describe("Alt text describing the GIF for accessibility"),
         }),
         async execute(input) {
+          console.log('🎬 Searching for GIF:', input.searchQuery);
           const gifUrl = await searchGif(input.searchQuery);
-          return { gifUrl, alt: input.alt };
+          console.log('🎬 Found GIF URL:', gifUrl);
+          if (!gifUrl) {
+            return { error: 'Could not find a GIF for that search' };
+          }
+          return { gifUrl, alt: input.alt, success: true };
+        },
+      }),
+      getTime: createRorkTool({
+        description: "Get current time and date. Use this when user asks about time, date, or what day it is.",
+        zodSchema: z.object({
+          format: z.enum(['full', 'time', 'date']).describe("What format to return: 'full' for both date and time, 'time' for just time, 'date' for just date").optional(),
+        }),
+        async execute(input) {
+          const now = new Date();
+          const format = input.format || 'full';
+          
+          const timeStr = now.toLocaleTimeString('en-US', { 
+            hour: 'numeric', 
+            minute: '2-digit',
+            hour12: true 
+          });
+          
+          const dateStr = now.toLocaleDateString('en-US', { 
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+
+          if (format === 'time') return { time: timeStr };
+          if (format === 'date') return { date: dateStr };
+          
+          return { 
+            time: timeStr,
+            date: dateStr,
+            full: `${dateStr} at ${timeStr}`,
+            timestamp: now.getTime(),
+          };
+        },
+      }),
+      getLocation: createRorkTool({
+        description: "Get user's current location. Use this when user asks where they are or needs location-based information.",
+        zodSchema: z.object({
+          reason: z.string().describe("Why you need the location (e.g., 'to check weather', 'to answer where you are')"),
+        }),
+        async execute(input) {
+          console.log('📍 Getting location for:', input.reason);
+          const location = await getCurrentLocation();
+          console.log('📍 Location result:', location);
+          return location;
+        },
+      }),
+      getWeather: createRorkTool({
+        description: "Get current weather information. Use this when user asks about weather. You'll need to get location first if not already available.",
+        zodSchema: z.object({
+          latitude: z.number().describe("Latitude coordinate"),
+          longitude: z.number().describe("Longitude coordinate"),
+          cityName: z.string().describe("Name of the city for context").optional(),
+        }),
+        async execute(input) {
+          console.log('🌤️ Getting weather for:', input.latitude, input.longitude);
+          const weather = await getWeather(input.latitude, input.longitude);
+          console.log('🌤️ Weather result:', weather);
+          return weather;
         },
       }),
       changeMood: createRorkTool({

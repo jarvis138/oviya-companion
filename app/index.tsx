@@ -17,8 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
-import { buildSystemPrompt, detectCrisis, getGreetingForMood } from '../services/oviya';
-import { generateText } from '@rork-ai/toolkit-sdk';
+import { buildSystemPrompt, detectCrisis, getGreetingForMood, useOviyaChat } from '../services/oviya';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
 import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
 import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/monthlyLetter';
@@ -40,11 +39,13 @@ function ChatScreen() {
     changeMood,
   } = useChat();
 
+  const { messages: agentMessages, sendMessage } = useOviyaChat();
   const [inputText, setInputText] = useState('');
   const [showStickers, setShowStickers] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  const lastProcessedAgentMessageRef = useRef<string | null>(null);
 
   const sendWelcomeMessageRef = useRef(false);
 
@@ -178,6 +179,60 @@ function ChatScreen() {
     return Math.min(baseDelay + words * perWordDelay, 4000);
   };
 
+  useEffect(() => {
+    const lastAgentMessage = agentMessages[agentMessages.length - 1];
+    if (
+      lastAgentMessage &&
+      lastAgentMessage.role === 'assistant' &&
+      lastAgentMessage.id !== lastProcessedAgentMessageRef.current
+    ) {
+      lastProcessedAgentMessageRef.current = lastAgentMessage.id;
+
+      const messageParts: Message['parts'] = [];
+      let hasTextContent = false;
+
+      for (const part of lastAgentMessage.parts) {
+        if (part.type === 'text') {
+          hasTextContent = true;
+          messageParts.push({ type: 'text', text: part.text });
+        } else if (part.type === 'tool') {
+          if (part.state === 'output-available') {
+            const output = part.output as any;
+
+            if (part.toolName === 'sendGif' && output.gifUrl) {
+              console.log('💫 Adding GIF to message:', output.gifUrl);
+              messageParts.push({
+                type: 'gif',
+                url: output.gifUrl,
+                alt: output.alt || 'GIF',
+              });
+            }
+
+            if (part.toolName === 'changeMood') {
+              changeMood(output.mood);
+            }
+
+            if (part.toolName === 'rememberFact') {
+              addToMemory(output.fact);
+            }
+          }
+        }
+      }
+
+      if (messageParts.length > 0 && hasTextContent) {
+        const oviyaMessage: Message = {
+          id: `agent-${lastAgentMessage.id}`,
+          role: 'assistant',
+          parts: messageParts,
+          timestamp: Date.now(),
+        };
+
+        setIsTyping(false);
+        addMessage(oviyaMessage);
+      }
+    }
+  }, [agentMessages, addMessage, changeMood, addToMemory, setIsTyping]);
+
   const handleSend = useCallback(async () => {
     if (!inputText.trim()) return;
 
@@ -193,13 +248,14 @@ function ChatScreen() {
     };
 
     addMessage(userMessage);
+    const userInput = inputText.trim();
     setInputText('');
 
     setIsTyping(true);
 
     try {
       const systemPrompt = buildSystemPrompt(userMemory, currentMood);
-      
+
       const conversationHistory = messages.slice(-10).map(msg => ({
         role: msg.role,
         content: msg.parts
@@ -208,31 +264,15 @@ function ChatScreen() {
           .join('\n'),
       }));
 
-      const delay = simulateTypingDelay(inputText);
+      const delay = simulateTypingDelay(userInput);
       await new Promise(resolve => setTimeout(resolve, delay));
 
-      const response = await generateText({
-        messages: [
-          { role: 'user' as const, content: systemPrompt },
-          ...conversationHistory.map(msg => ({
-            role: msg.role as 'user' | 'assistant',
-            content: msg.content,
-          })),
-          { role: 'user' as const, content: inputText.trim() },
-        ],
+      await sendMessage({
+        text: `${systemPrompt}\n\n---\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\n---\n\nUser: ${userInput}`,
       });
 
-      const oviyaMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        parts: [{ type: 'text', text: response }],
-        timestamp: Date.now(),
-      };
-
-      addMessage(oviyaMessage);
-
-      if (inputText.toLowerCase().includes('my name is ')) {
-        const nameMatch = inputText.match(/my name is (\w+)/i);
+      if (userInput.toLowerCase().includes('my name is ')) {
+        const nameMatch = userInput.match(/my name is (\w+)/i);
         if (nameMatch) {
           updateMemory({ name: nameMatch[1] });
         }
@@ -244,23 +284,23 @@ function ChatScreen() {
         /my (mom|dad|family|friend)/i,
       ];
 
-      if (importantPatterns.some(pattern => pattern.test(inputText))) {
-        addToMemory(inputText.trim());
+      if (importantPatterns.some(pattern => pattern.test(userInput))) {
+        addToMemory(userInput.trim());
       }
 
-      const isStressed = detectStress(inputText);
+      const isStressed = detectStress(userInput);
       updateStressTracking(isStressed);
 
       const strengthPatterns = [
-        { regex: /i (explained|told|taught|showed) (him|her|them|someone)/i, strength: 'clear communication', evidence: inputText },
-        { regex: /i (helped|supported|listened|was there for) (him|her|them|someone)/i, strength: 'emotional support', evidence: inputText },
-        { regex: /i (figured out|solved|analyzed|worked through)/i, strength: 'problem solving', evidence: inputText },
-        { regex: /i (created|designed|made|built)/i, strength: 'creativity', evidence: inputText },
-        { regex: /i (organized|planned|coordinated|managed)/i, strength: 'leadership', evidence: inputText },
+        { regex: /i (explained|told|taught|showed) (him|her|them|someone)/i, strength: 'clear communication', evidence: userInput },
+        { regex: /i (helped|supported|listened|was there for) (him|her|them|someone)/i, strength: 'emotional support', evidence: userInput },
+        { regex: /i (figured out|solved|analyzed|worked through)/i, strength: 'problem solving', evidence: userInput },
+        { regex: /i (created|designed|made|built)/i, strength: 'creativity', evidence: userInput },
+        { regex: /i (organized|planned|coordinated|managed)/i, strength: 'leadership', evidence: userInput },
       ];
 
       for (const pattern of strengthPatterns) {
-        if (pattern.regex.test(inputText)) {
+        if (pattern.regex.test(userInput)) {
           await saveSpottedStrength(pattern.strength, pattern.evidence);
           
           const patterns = await getStrengthPatterns();
@@ -315,7 +355,7 @@ function ChatScreen() {
 
     } catch (error) {
       console.error('Error getting response:', error);
-      
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -329,10 +369,9 @@ function ChatScreen() {
       };
 
       addMessage(errorMessage);
-    } finally {
       setIsTyping(false);
     }
-  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking]);
+  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking, sendMessage]);
 
   const sendSticker = useCallback((sticker: string) => {
     if (Platform.OS !== 'web') {
