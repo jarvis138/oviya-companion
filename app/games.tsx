@@ -17,7 +17,7 @@ import { useChat } from '../contexts/ChatContext';
 import { CONVERSATION_GAMES, type ConversationGame } from '../utils/conversationGames';
 
 export default function GamesScreen() {
-  const { currentMood, addMessage } = useChat();
+  const { currentMood, addMessage, setIsTyping, isTyping, activateConversationGame } = useChat();
   const [selectedCategory, setSelectedCategory] = useState<'all' | ConversationGame['category']>('all');
 
   const moodColors = getColorsForMood(currentMood || 'caring');
@@ -35,6 +35,7 @@ export default function GamesScreen() {
     : CONVERSATION_GAMES.filter(g => g.category === selectedCategory);
 
   const startGame = (game: ConversationGame) => {
+    console.log('[GamesScreen] Starting game', game.id);
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -69,7 +70,21 @@ export default function GamesScreen() {
       timestamp: Date.now(),
     };
 
-    addMessage(gameMessage);
+    const shouldControlTyping = !isTyping;
+    if (shouldControlTyping) {
+      setIsTyping(true);
+    }
+
+    activateConversationGame(game);
+
+    setTimeout(() => {
+      console.log('[GamesScreen] Injecting game prompt', game.id);
+      addMessage(gameMessage);
+      if (shouldControlTyping) {
+        setIsTyping(false);
+      }
+    }, 600);
+
     router.back();
   };
 
@@ -77,6 +92,7 @@ export default function GamesScreen() {
     return (
       <Pressable
         onPress={() => startGame(item)}
+        testID={`start-game-${item.id}`}
         style={({ pressed }) => [
           styles.gameCard,
           pressed && styles.gameCardPressed,

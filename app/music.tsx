@@ -27,6 +27,7 @@ export default function MusicScreen() {
   const { currentMood, addMessage } = useChat();
   const [recommendations, setRecommendations] = useState<SongRecommendation[]>([]);
   const [selectedMood, setSelectedMood] = useState<MusicMood>('chill');
+  const [highlightedRecommendation, setHighlightedRecommendation] = useState<SongRecommendation | null>(null);
 
   const moodColors = getColorsForMood(currentMood || 'caring');
 
@@ -37,6 +38,7 @@ export default function MusicScreen() {
   const loadRecommendations = async () => {
     const history = await getRecommendationHistory();
     setRecommendations(history);
+    setHighlightedRecommendation(history.length > 0 ? history[0] : null);
   };
 
   const moods: { key: MusicMood; label: string }[] = [
@@ -56,23 +58,25 @@ export default function MusicScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
+    console.log('[MusicScreen] Generating recommendation for mood', selectedMood);
     const recommendation = getMusicRecommendation(selectedMood);
-    
+
+    setRecommendations(prev => [recommendation, ...prev.filter(item => item.id !== recommendation.id)]);
+    setHighlightedRecommendation(recommendation);
+
     const musicMessage = {
       id: `music-${Date.now()}`,
       role: 'assistant' as const,
       parts: [
         {
           type: 'text' as const,
-          text: `🎵 ${recommendation.title}\n${recommendation.artist}${recommendation.album ? ` - ${recommendation.album}` : ''}\n\n${recommendation.reason}\n\n${recommendation.youtubeUrl ? 'Listen on YouTube 🎧' : ''}`,
+          text: `🎧 ${recommendation.title}\n${recommendation.artist}${recommendation.album ? ` – ${recommendation.album}` : ''}\n\n${recommendation.reason}\n\n${recommendation.youtubeUrl ? `Listen now: ${recommendation.youtubeUrl}` : ''}`,
         },
       ],
       timestamp: Date.now(),
     };
 
     addMessage(musicMessage);
-    loadRecommendations();
-    router.back();
   };
 
   const openLink = (url: string) => {
@@ -194,6 +198,7 @@ export default function MusicScreen() {
             <Pressable
               onPress={getRecommendationForMood}
               style={[styles.getRecommendButton, { backgroundColor: moodColors.accent }]}
+              testID="music-get-recommendation"
             >
               <Music2 size={20} color="#FFFFFF" />
               <Text style={styles.getRecommendButtonText}>
@@ -202,6 +207,45 @@ export default function MusicScreen() {
             </Pressable>
           </LinearGradient>
         </View>
+
+        {highlightedRecommendation && (
+          <View style={styles.highlightCard} testID="music-highlight">
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.95)', 'rgba(255, 255, 255, 0.88)']}
+              style={styles.highlightGradient}
+            >
+              <View style={styles.highlightHeader}>
+                <View style={[styles.highlightBadge, { backgroundColor: moodColors.accentLight }]}
+                >
+                  <Text style={[styles.highlightBadgeText, { color: moodColors.accent }]}>{getMoodEmoji(highlightedRecommendation.mood as MusicMood)} {highlightedRecommendation.mood}</Text>
+                </View>
+                <Pressable
+                  onPress={() => setHighlightedRecommendation(null)}
+                  style={styles.highlightDismiss}
+                  hitSlop={8}
+                >
+                  <Text style={styles.highlightDismissText}>Hide</Text>
+                </Pressable>
+              </View>
+
+              <Text style={styles.highlightTitle}>{highlightedRecommendation.title}</Text>
+              <Text style={styles.highlightArtist}>{highlightedRecommendation.artist}{highlightedRecommendation.album ? ` • ${highlightedRecommendation.album}` : ''}</Text>
+              <Text style={styles.highlightReason}>{highlightedRecommendation.reason}</Text>
+
+              {highlightedRecommendation.youtubeUrl && (
+                <Pressable
+                  onPress={() => openLink(highlightedRecommendation.youtubeUrl!)}
+                  style={[styles.highlightAction, { backgroundColor: moodColors.accent }]}
+                  testID="music-highlight-play"
+                >
+                  <Play size={16} color="#FFFFFF" />
+                  <Text style={styles.highlightActionText}>Play now</Text>
+                  <ExternalLink size={14} color="#FFFFFF" />
+                </Pressable>
+              )}
+            </LinearGradient>
+          </View>
+        )}
 
         <View style={styles.historyHeader}>
           <Text style={styles.historyTitle}>Your Music History</Text>
@@ -321,6 +365,77 @@ const styles = StyleSheet.create({
   },
   getRecommendButtonText: {
     fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  highlightCard: {
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  highlightGradient: {
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  highlightHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  highlightBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  highlightBadgeText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    textTransform: 'capitalize' as const,
+  },
+  highlightDismiss: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  highlightDismissText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.light.text,
+  },
+  highlightTitle: {
+    fontSize: 22,
+    fontWeight: '700' as const,
+    color: Colors.light.text,
+    marginBottom: 4,
+  },
+  highlightArtist: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.light.textSecondary,
+    marginBottom: 12,
+  },
+  highlightReason: {
+    fontSize: 14,
+    color: Colors.light.text,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  highlightAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  highlightActionText: {
+    fontSize: 15,
     fontWeight: '700' as const,
     color: '#FFFFFF',
   },

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ConversationGame } from '../utils/conversationGames';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -78,6 +79,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   const [currentMood, setCurrentMood] = useState<OviyaMood>('caring');
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeConversationGame, setActiveConversationGame] = useState<ConversationGame | null>(null);
 
   useEffect(() => {
     loadData();
@@ -240,12 +242,17 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     });
   }, [saveMessages]);
 
-  return {
+  const activateConversationGame = useCallback((game: ConversationGame | null) => {
+    setActiveConversationGame(game);
+  }, []);
+
+  const contextValue = useMemo(() => ({
     messages,
     userMemory,
     currentMood,
     isTyping,
     isLoading,
+    activeConversationGame,
     setIsTyping,
     addMessage,
     updateMemory,
@@ -255,5 +262,24 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     updateStressTracking,
     saveMoment,
     addReaction,
-  };
+    activateConversationGame,
+  }), [
+    messages,
+    userMemory,
+    currentMood,
+    isTyping,
+    isLoading,
+    activeConversationGame,
+    addMessage,
+    updateMemory,
+    addToMemory,
+    changeMood,
+    detectStress,
+    updateStressTracking,
+    saveMoment,
+    addReaction,
+    activateConversationGame,
+  ]);
+
+  return contextValue;
 });

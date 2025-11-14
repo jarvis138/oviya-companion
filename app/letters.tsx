@@ -282,6 +282,8 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginTop: 24,
     marginBottom: 12,
+    textAlign: 'center' as const,
+    letterSpacing: 0.3,
   },
   emptyDescription: {
     fontSize: 16,

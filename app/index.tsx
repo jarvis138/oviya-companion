@@ -84,6 +84,8 @@ function ChatScreen() {
     updateStressTracking,
     changeMood,
     addReaction,
+    activeConversationGame,
+    activateConversationGame,
   } = useChat();
 
   const [inputText, setInputText] = useState('');
@@ -100,6 +102,17 @@ function ChatScreen() {
       sendWelcomeMessage();
     }
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!activeConversationGame) {
+      return;
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.role === 'user') {
+      console.log('[ChatScreen] Clearing active game after user reply');
+      activateConversationGame(null);
+    }
+  }, [messages, activeConversationGame, activateConversationGame]);
 
   useEffect(() => {
     const anniversary = checkAnniversary(
@@ -534,6 +547,43 @@ function ChatScreen() {
           </View>
         )}
 
+        {activeConversationGame && (
+          <View style={styles.activeGameBanner} testID="active-conversation-game">
+            <LinearGradient
+              colors={['rgba(255, 255, 255, 0.95)', 'rgba(255, 255, 255, 0.85)']}
+              style={styles.activeGameGradient}
+            >
+              <View style={styles.activeGameHeader}>
+                <Text style={styles.activeGameEmoji}>{activeConversationGame.emoji}</Text>
+                <View style={styles.activeGameTitleWrapper}>
+                  <Text style={styles.activeGameTitle}>{activeConversationGame.name}</Text>
+                  <Text style={styles.activeGameSubtitle}>Keep chatting to play this round with Oviya</Text>
+                </View>
+              </View>
+              <Text style={styles.activeGameDescription}>{activeConversationGame.description}</Text>
+              <View style={styles.activeGameActions}>
+                <Pressable
+                  onPress={() => activateConversationGame(null)}
+                  style={[styles.activeGameAction, styles.activeGameSecondary]}
+                  testID="end-conversation-game"
+                >
+                  <Text style={styles.activeGameSecondaryText}>End Game</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => {
+                    activateConversationGame(null);
+                    router.push('/games');
+                  }}
+                  style={[styles.activeGameAction, styles.activeGamePrimary]}
+                  testID="swap-conversation-game"
+                >
+                  <Text style={styles.activeGamePrimaryText}>Try Another</Text>
+                </Pressable>
+              </View>
+            </LinearGradient>
+          </View>
+        )}
+
         {showMoodPicker && (
           <View style={styles.moodPicker}>
             <Text style={styles.moodPickerTitle}>How should Oviya feel today?</Text>
@@ -854,5 +904,76 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.border,
     marginVertical: 4,
     marginHorizontal: 20,
+  },
+  activeGameBanner: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  activeGameGradient: {
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  activeGameHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  activeGameEmoji: {
+    fontSize: 40,
+  },
+  activeGameTitleWrapper: {
+    flex: 1,
+  },
+  activeGameTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.light.text,
+  },
+  activeGameSubtitle: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    marginTop: 4,
+  },
+  activeGameDescription: {
+    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.light.text,
+  },
+  activeGameActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 18,
+  },
+  activeGameAction: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeGameSecondary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  activeGamePrimary: {
+    backgroundColor: Colors.light.accent,
+  },
+  activeGamePrimaryText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  activeGameSecondaryText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.light.text,
   },
 });

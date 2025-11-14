@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ArrowLeft, User, Settings as SettingsIcon, LogOut, Heart, MessageCircle } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { router, Stack } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -22,19 +22,26 @@ import { useAuth } from '../contexts/AuthContext';
 const AVATAR_EMOJIS = ['😊', '🤗', '😎', '🥰', '✨', '🌸', '🌟', '💜', '🎨', '🚀', '🦄', '🌈'];
 
 export default function ProfileScreen() {
-  const { currentMood, userMemory, messages } = useChat();
+  const { currentMood, userMemory, messages, updateMemory } = useChat();
   const { userProfile, updateProfile, logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [tempName, setTempName] = useState(userProfile?.name || '');
+  const [tempName, setTempName] = useState(userProfile?.name || userMemory.name || '');
 
   const moodColors = getColorsForMood(currentMood || 'caring');
+
+  useEffect(() => {
+    setTempName(userProfile?.name || userMemory.name || '');
+  }, [userProfile?.name, userMemory.name]);
 
   const handleSaveName = () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    
-    updateProfile({ name: tempName });
+
+    const trimmedName = tempName.trim();
+    console.log('[ProfileScreen] Saving display name', trimmedName);
+    updateProfile({ name: trimmedName });
+    updateMemory({ name: trimmedName || undefined });
     setIsEditing(false);
   };
 
