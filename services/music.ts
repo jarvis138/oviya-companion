@@ -543,8 +543,11 @@ Generate one unique song recommendation.`,
     await saveRecommendation(recommendation);
     return recommendation;
   } catch (error) {
-    console.error('Failed to generate AI recommendation, using fallback:', error);
+    console.error('Failed to generate AI recommendation, using fallback:', error instanceof Error ? error.message : String(error));
     const songs = CURATED_RECOMMENDATIONS[mood] || CURATED_RECOMMENDATIONS.chill;
+    if (!songs || songs.length === 0) {
+      throw new Error('No fallback songs available');
+    }
     const randomSong = songs[Math.floor(Math.random() * songs.length)];
     
     const recommendation: SongRecommendation = {
