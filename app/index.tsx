@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2, Film } from 'lucide-react-native';
+import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2, Film, Music2, User } from 'lucide-react-native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -507,6 +507,30 @@ function ChatScreen() {
               <Film size={18} color={moodColors.accent} />
               <Text style={styles.menuItemText}>Movie Recommendations</Text>
             </Pressable>
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/music');
+              }}
+              style={styles.menuItem}
+            >
+              <Music2 size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Music for You</Text>
+            </Pressable>
+            
+            <View style={styles.menuDivider} />
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/profile');
+              }}
+              style={styles.menuItem}
+            >
+              <User size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Your Profile</Text>
+            </Pressable>
           </View>
         )}
 
@@ -824,5 +848,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700' as const,
     color: '#FFFFFF',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: Colors.light.border,
+    marginVertical: 4,
+    marginHorizontal: 20,
   },
 });

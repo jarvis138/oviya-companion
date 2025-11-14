@@ -4,6 +4,7 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { ChatProvider } from "../contexts/ChatContext";
+import { AuthProvider } from "../contexts/AuthContext";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -19,6 +20,9 @@ function RootLayoutNav() {
       <Stack.Screen name="strengths" options={{ headerShown: false }} />
       <Stack.Screen name="letters" options={{ headerShown: false }} />
       <Stack.Screen name="movies" options={{ headerShown: false }} />
+      <Stack.Screen name="music" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
     </Stack>
   );
 }
@@ -30,11 +34,13 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ChatProvider>
-        <GestureHandlerRootView>
-          <RootLayoutNav />
-        </GestureHandlerRootView>
-      </ChatProvider>
+      <AuthProvider>
+        <ChatProvider>
+          <GestureHandlerRootView>
+            <RootLayoutNav />
+          </GestureHandlerRootView>
+        </ChatProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
