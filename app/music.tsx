@@ -28,6 +28,7 @@ export default function MusicScreen() {
   const [recommendations, setRecommendations] = useState<SongRecommendation[]>([]);
   const [selectedMood, setSelectedMood] = useState<MusicMood>('chill');
   const [highlightedRecommendation, setHighlightedRecommendation] = useState<SongRecommendation | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const moodColors = getColorsForMood(currentMood || 'caring');
 
@@ -53,30 +54,38 @@ export default function MusicScreen() {
     { key: 'peaceful', label: 'Peaceful' },
   ];
 
-  const getRecommendationForMood = () => {
+  const getRecommendationForMood = async () => {
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
 
     console.log('[MusicScreen] Generating recommendation for mood', selectedMood);
-    const recommendation = getMusicRecommendation(selectedMood);
+    setIsGenerating(true);
 
-    setRecommendations(prev => [recommendation, ...prev.filter(item => item.id !== recommendation.id)]);
-    setHighlightedRecommendation(recommendation);
+    try {
+      const recommendation = await getMusicRecommendation(selectedMood);
 
-    const musicMessage = {
-      id: `music-${Date.now()}`,
-      role: 'assistant' as const,
-      parts: [
-        {
-          type: 'text' as const,
-          text: `🎧 ${recommendation.title}\n${recommendation.artist}${recommendation.album ? ` – ${recommendation.album}` : ''}\n\n${recommendation.reason}\n\n${recommendation.youtubeUrl ? `Listen now: ${recommendation.youtubeUrl}` : ''}`,
-        },
-      ],
-      timestamp: Date.now(),
-    };
+      setRecommendations(prev => [recommendation, ...prev.filter(item => item.id !== recommendation.id)]);
+      setHighlightedRecommendation(recommendation);
 
-    addMessage(musicMessage);
+      const musicMessage = {
+        id: `music-${Date.now()}`,
+        role: 'assistant' as const,
+        parts: [
+          {
+            type: 'text' as const,
+            text: `🎧 ${recommendation.title}\n${recommendation.artist}${recommendation.album ? ` – ${recommendation.album}` : ''}\n\n${recommendation.reason}\n\n${recommendation.youtubeUrl ? `Listen now: ${recommendation.youtubeUrl}` : ''}`,
+          },
+        ],
+        timestamp: Date.now(),
+      };
+
+      addMessage(musicMessage);
+    } catch (error) {
+      console.error('[MusicScreen] Failed to generate recommendation:', error);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const openLink = (url: string) => {
@@ -197,12 +206,13 @@ export default function MusicScreen() {
 
             <Pressable
               onPress={getRecommendationForMood}
-              style={[styles.getRecommendButton, { backgroundColor: moodColors.accent }]}
+              style={[styles.getRecommendButton, { backgroundColor: moodColors.accent, opacity: isGenerating ? 0.6 : 1 }]}
               testID="music-get-recommendation"
+              disabled={isGenerating}
             >
               <Music2 size={20} color="#FFFFFF" />
               <Text style={styles.getRecommendButtonText}>
-                Get Song Recommendation
+                {isGenerating ? 'Finding the perfect song...' : 'Get Song Recommendation'}
               </Text>
             </Pressable>
           </LinearGradient>

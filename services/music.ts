@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateObject } from '@rork-ai/toolkit-sdk';
+import { z } from 'zod';
 
 export type SongRecommendation = {
   id: string;
@@ -489,21 +491,71 @@ export async function saveRecommendation(recommendation: SongRecommendation): Pr
   }
 }
 
-export function getMusicRecommendation(
+export async function getMusicRecommendation(
   mood: MusicMood,
-  context?: string
-): SongRecommendation {
-  const songs = CURATED_RECOMMENDATIONS[mood] || CURATED_RECOMMENDATIONS.chill;
-  const randomSong = songs[Math.floor(Math.random() * songs.length)];
-  
-  const recommendation: SongRecommendation = {
-    ...randomSong,
-    id: `${randomSong.id}_${Date.now()}`,
-    timestamp: Date.now(),
-  };
+  context?: string,
+  previousRecommendations?: SongRecommendation[]
+): Promise<SongRecommendation> {
+  try {
+    const history = await getRecommendationHistory();
+    const recentSongs = history.slice(0, 20).map(r => `${r.title} by ${r.artist}`);
 
-  saveRecommendation(recommendation);
-  return recommendation;
+    const schema = z.object({
+      title: z.string().describe('Song title'),
+      artist: z.string().describe('Artist or band name'),
+      album: z.string().optional().describe('Album name if applicable'),
+      youtubeSearchQuery: z.string().describe('Search query to find this song on YouTube'),
+      reason: z.string().describe('A short, personal reason why this song matches the mood (1-2 sentences, conversational tone)'),
+    });
+
+    const result = await generateObject({
+      messages: [
+        {
+          role: 'user',
+          content: `You are a music expert with deep knowledge of both Bollywood and international music. Generate a song recommendation for someone feeling "${mood}".
+
+${context ? `Context: ${context}\n` : ''}Requirements:
+- Mix of Bollywood and international songs
+- Fresh recommendations (avoid these recent suggestions: ${recentSongs.join(', ')})
+- The song should genuinely match the "${mood}" mood
+- Keep the reason conversational and relatable (no generic AI phrases or dashes)
+- Make it feel personal
+
+Generate one unique song recommendation.`,
+        },
+      ],
+      schema,
+    });
+
+    const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(result.youtubeSearchQuery)}`;
+
+    const recommendation: SongRecommendation = {
+      id: `${mood}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      title: result.title,
+      artist: result.artist,
+      album: result.album,
+      youtubeUrl,
+      mood,
+      reason: result.reason,
+      timestamp: Date.now(),
+    };
+
+    await saveRecommendation(recommendation);
+    return recommendation;
+  } catch (error) {
+    console.error('Failed to generate AI recommendation, using fallback:', error);
+    const songs = CURATED_RECOMMENDATIONS[mood] || CURATED_RECOMMENDATIONS.chill;
+    const randomSong = songs[Math.floor(Math.random() * songs.length)];
+    
+    const recommendation: SongRecommendation = {
+      ...randomSong,
+      id: `${randomSong.id}_${Date.now()}`,
+      timestamp: Date.now(),
+    };
+
+    await saveRecommendation(recommendation);
+    return recommendation;
+  }
 }
 
 export function detectMoodFromMessage(message: string): MusicMood {
