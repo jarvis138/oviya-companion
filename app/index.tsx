@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2 } from 'lucide-react-native';
+import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2, Film } from 'lucide-react-native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -439,6 +439,17 @@ function ChatScreen() {
             >
               <Mail size={18} color={moodColors.accent} />
               <Text style={styles.menuItemText}>Monthly Letters</Text>
+            </Pressable>
+            
+            <Pressable
+              onPress={() => {
+                setShowMenu(false);
+                router.push('/movies');
+              }}
+              style={styles.menuItem}
+            >
+              <Film size={18} color={moodColors.accent} />
+              <Text style={styles.menuItemText}>Movie Recommendations</Text>
             </Pressable>
           </View>
         )}
