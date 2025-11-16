@@ -25,32 +25,53 @@ import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/mon
 
 const STICKERS = ['❤️', '🎉', '😂', '🤗', '✨', '🔥', '👏', '😊'];
 
-function shouldOviyaReact(userMessage: string, oviyaResponse: string): { shouldReact: boolean; emoji?: string } {
+const REACTION_EMOJIS = {
+  celebration: ['🎉', '🎊', '🥳', '🌟', '💫', '✨'],
+  fire: ['🔥', '💪', '⚡', '👊', '💥'],
+  love: ['❤️', '💜', '💕', '💖', '🥰'],
+  support: ['🤗', '💙', '🫂', '💚'],
+  funny: ['😂', '🤣', '😆', '💀'],
+  wisdom: ['✨', '💡', '🎯', '👁️'],
+  wholesome: ['🌈', '☀️', '🌸', '🦋'],
+  excited: ['😱', '🤯', '😍', '🙌'],
+  thinking: ['🤔', '💭', '🧐'],
+  relatable: ['👀', '💯', '📌', '🎭'],
+};
+
+function getRandomEmoji(category: keyof typeof REACTION_EMOJIS): string {
+  const emojis = REACTION_EMOJIS[category];
+  return emojis[Math.floor(Math.random() * emojis.length)];
+}
+
+function shouldOviyaReactToUser(userMessage: string): { shouldReact: boolean; emoji?: string } {
   const lower = userMessage.toLowerCase();
   
   const excitementPatterns = [
-    { regex: /(got|passed|cleared|accepted|selected|won|achieved).*?(job|offer|exam|test|interview|promotion|award)/i, emoji: '🎉' },
-    { regex: /(celebrate|happy|excited|amazing|great news|good news)/i, emoji: '🎉' },
+    { regex: /(got|passed|cleared|accepted|selected|won|achieved).*?(job|offer|exam|test|interview|promotion|award)/i, category: 'celebration' as const },
+    { regex: /(celebrate|happy|excited|amazing|great news|good news)/i, category: 'celebration' as const },
   ];
   
   const accomplishmentPatterns = [
-    { regex: /(finally|completed|finished|did it|made it|success)/i, emoji: '🔥' },
-    { regex: /(proud of|accomplished|achieved)/i, emoji: '👏' },
+    { regex: /(finally|completed|finished|did it|made it|success)/i, category: 'fire' as const },
+    { regex: /(proud of|accomplished|achieved)/i, category: 'fire' as const },
   ];
   
   const loveGratitudePatterns = [
-    { regex: /(love you|thank you|grateful|appreciate|thanks oviya)/i, emoji: '❤️' },
-    { regex: /(you're|you are).*(best|amazing|awesome|great|helpful)/i, emoji: '🤗' },
+    { regex: /(love you|thank you|grateful|appreciate|thanks oviya)/i, category: 'love' as const },
+    { regex: /(you're|you are).*(best|amazing|awesome|great|helpful)/i, category: 'love' as const },
   ];
   
   const funnyPatterns = [
-    { regex: /(lol|haha|lmao|😂|funny|hilarious)/i, emoji: '😂' },
-    { regex: oviyaResponse.includes('😂') || oviyaResponse.includes('🤣') || oviyaResponse.includes('lol'), emoji: '😂' },
+    { regex: /(lol|haha|lmao|😂|funny|hilarious)/i, category: 'funny' as const },
   ];
   
   const wholesomePatterns = [
-    { regex: /(feeling better|much better|that helped|feel good)/i, emoji: '✨' },
-    { regex: /(exactly|spot on|you get me|understand me)/i, emoji: '✨' },
+    { regex: /(feeling better|much better|that helped|feel good)/i, category: 'wholesome' as const },
+    { regex: /(exactly|spot on|you get me|understand me)/i, category: 'wisdom' as const },
+  ];
+  
+  const relatablePatterns = [
+    { regex: /(same|relatable|me too|i feel you|facts)/i, category: 'relatable' as const },
   ];
   
   const allPatterns = [
@@ -59,12 +80,43 @@ function shouldOviyaReact(userMessage: string, oviyaResponse: string): { shouldR
     ...loveGratitudePatterns,
     ...funnyPatterns,
     ...wholesomePatterns,
+    ...relatablePatterns,
   ];
   
   for (const pattern of allPatterns) {
-    if (typeof pattern.regex === 'boolean' ? pattern.regex : pattern.regex.test(lower)) {
-      return { shouldReact: true, emoji: pattern.emoji };
+    if (pattern.regex.test(lower)) {
+      return { shouldReact: true, emoji: getRandomEmoji(pattern.category) };
     }
+  }
+  
+  return { shouldReact: false };
+}
+
+function shouldUserReactToOviya(oviyaMessage: string): { shouldReact: boolean; emoji?: string } {
+  const lower = oviyaMessage.toLowerCase();
+  
+  if (/wait.*i.*noticed|strength|pattern|you('re| are) good at/i.test(lower)) {
+    return { shouldReact: true, emoji: getRandomEmoji('thinking') };
+  }
+  
+  if (/funny|😂|🤣|lol|haha/i.test(lower)) {
+    return { shouldReact: true, emoji: getRandomEmoji('funny') };
+  }
+  
+  if (/proud|amazing|awesome|killing it|crushing it/i.test(lower)) {
+    return { shouldReact: true, emoji: getRandomEmoji('fire') };
+  }
+  
+  if (/love|care about you|here for you|support/i.test(lower)) {
+    return { shouldReact: true, emoji: getRandomEmoji('support') };
+  }
+  
+  if (/exactly|you get it|spot on|nailed it/i.test(lower)) {
+    return { shouldReact: true, emoji: getRandomEmoji('wisdom') };
+  }
+  
+  if (Math.random() < 0.15) {
+    return { shouldReact: true, emoji: getRandomEmoji('wholesome') };
   }
   
   return { shouldReact: false };
@@ -295,6 +347,28 @@ function ChatScreen() {
     setIsTyping(true);
 
     try {
+      const isCrisis = detectCrisis(inputText);
+      
+      if (isCrisis) {
+        const crisisMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          parts: [
+            {
+              type: 'text',
+              text: "I'm really worried about what you just shared. If you're thinking about hurting yourself, please reach out for help right now:\n\n🆘 **988 Suicide & Crisis Lifeline**: Call or text 988 (US)\n💬 **Crisis Text Line**: Text HOME to 741741 (US)\n🇮🇳 **AASRA (India)**: 91-9820466726\n🌐 **NIMH**: https://www.nimh.nih.gov/health/find-help\n\nI care about you, but I'm not equipped to handle this alone. Please talk to someone who can help keep you safe.\n\nAre you in immediate danger right now?",
+            },
+          ],
+          timestamp: Date.now(),
+        };
+        
+        setIsTyping(false);
+        setTimeout(() => {
+          addMessage(crisisMessage);
+        }, 800);
+        return;
+      }
+      
       const systemPrompt = buildSystemPrompt(userMemory, currentMood);
       
       const conversationHistory = messages.slice(-10).map(msg => ({
@@ -354,15 +428,30 @@ function ChatScreen() {
       }
 
       const fullResponse = chunks.join(' ');
-      const shouldReact = shouldOviyaReact(inputText, fullResponse);
-      if (shouldReact.shouldReact) {
+      
+      const oviyaReactsToUser = shouldOviyaReactToUser(inputText);
+      if (oviyaReactsToUser.shouldReact) {
         const reactionDelay = chunks.length > 1 ? 1500 : 1000;
         setTimeout(() => {
           if (Platform.OS !== 'web') {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }
-          addReaction(userMessage.id, shouldReact.emoji!);
+          addReaction(userMessage.id, oviyaReactsToUser.emoji!);
         }, reactionDelay);
+      }
+      
+      const lastOviyaMessage = chunks.length === 1 ? 
+        messages.find(m => m.id === (Date.now() + 1).toString()) : 
+        messages.find(m => m.id === `${Date.now()}-chunk-${chunks.length - 1}`);
+      
+      const userReactsToOviya = shouldUserReactToOviya(fullResponse);
+      if (userReactsToOviya.shouldReact && lastOviyaMessage) {
+        setTimeout(() => {
+          if (Platform.OS !== 'web') {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          addReaction(lastOviyaMessage.id, userReactsToOviya.emoji!);
+        }, 2000);
       }
 
       if (inputText.toLowerCase().includes('my name is ')) {
