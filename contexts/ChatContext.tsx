@@ -1,7 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { type ConversationGame } from '../utils/conversationGames';
+import { supabase } from '../services/supabase';
+import { useAuth } from './AuthContext';
 
 export type MessageRole = 'user' | 'assistant';
 
@@ -52,12 +53,6 @@ export type UserMemory = {
 
 export type OviyaMood = 'playful' | 'reflective' | 'energetic' | 'cozy' | 'caring';
 
-const STORAGE_KEYS = {
-  MESSAGES: 'oviya_messages',
-  MEMORY: 'oviya_memory',
-  MOOD: 'oviya_mood',
-};
-
 const DEFAULT_MEMORY: UserMemory = {
   preferences: {},
   importantFacts: [],
@@ -71,6 +66,7 @@ const DEFAULT_MEMORY: UserMemory = {
 };
 
 export const [ChatProvider, useChat] = createContextHook(() => {
+  const { userProfile } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [userMemory, setUserMemory] = useState<UserMemory>({
     ...DEFAULT_MEMORY,
@@ -81,58 +77,142 @@ export const [ChatProvider, useChat] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeConversationGame, setActiveConversationGame] = useState<ConversationGame | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const loadData = useCallback(async () => {
+    if (!userProfile?.id) {
+      setIsLoading(false);
+      return;
+    }
 
-  const loadData = async () => {
     try {
-      const [storedMessages, storedMemory, storedMood] = await Promise.all([
-        AsyncStorage.getItem(STORAGE_KEYS.MESSAGES),
-        AsyncStorage.getItem(STORAGE_KEYS.MEMORY),
-        AsyncStorage.getItem(STORAGE_KEYS.MOOD),
+      const [messagesData, memoryData] = await Promise.all([
+        supabase
+          .from('messages')
+          .select('*')
+          .eq('user_id', userProfile.id)
+          .order('timestamp', { ascending: true }),
+        supabase
+          .from('user_memory')
+          .select('*')
+          .eq('user_id', userProfile.id)
+          .single(),
       ]);
 
-      if (storedMessages) {
-        setMessages(JSON.parse(storedMessages));
+      if (messagesData.data) {
+        const loadedMessages: Message[] = messagesData.data.map((msg) => ({
+          id: msg.id,
+          role: msg.role as MessageRole,
+          parts: msg.parts as MessagePart[],
+          timestamp: msg.timestamp,
+          reactions: msg.reactions as Reaction[] | undefined,
+        }));
+        setMessages(loadedMessages);
       }
 
-      if (storedMemory) {
-        setUserMemory(JSON.parse(storedMemory));
+      if (memoryData.data) {
+        const mem = memoryData.data;
+        setUserMemory({
+          name: mem.name || undefined,
+          preferences: mem.preferences as Record<string, string>,
+          importantFacts: mem.important_facts,
+          conversationHistory: [],
+          firstMetDate: mem.first_met_date,
+          lastActiveDate: mem.last_active_date,
+          stressLevel: mem.stress_level,
+          consecutiveStressDays: mem.consecutive_stress_days,
+          lastStressDate: mem.last_stress_date || undefined,
+          celebratedMilestones: mem.celebrated_milestones.map(Number),
+          savedMoments: mem.saved_moments,
+        });
+        setCurrentMood(mem.current_mood as OviyaMood);
       } else {
         const initialMemory = {
           ...DEFAULT_MEMORY,
           firstMetDate: Date.now(),
         };
         setUserMemory(initialMemory);
-        await AsyncStorage.setItem(STORAGE_KEYS.MEMORY, JSON.stringify(initialMemory));
-      }
 
-      if (storedMood) {
-        setCurrentMood(storedMood as OviyaMood);
+        const { error } = await supabase.from('user_memory').insert({
+          user_id: userProfile.id,
+          name: null,
+          preferences: {},
+          important_facts: [],
+          first_met_date: initialMemory.firstMetDate,
+          last_active_date: initialMemory.lastActiveDate,
+          stress_level: 0,
+          consecutive_stress_days: 0,
+          last_stress_date: null,
+          celebrated_milestones: [],
+          saved_moments: [],
+          current_mood: 'caring',
+        });
+
+        if (error) {
+          console.error('Failed to create initial memory:', error);
+        }
       }
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userProfile?.id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const saveMessages = useCallback(async (newMessages: Message[]) => {
+    if (!userProfile?.id) return;
+
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(newMessages));
+      const lastMessage = newMessages[newMessages.length - 1];
+      if (lastMessage) {
+        const { error } = await supabase.from('messages').insert({
+          id: lastMessage.id,
+          user_id: userProfile.id,
+          role: lastMessage.role,
+          parts: lastMessage.parts,
+          timestamp: lastMessage.timestamp,
+          reactions: lastMessage.reactions || null,
+        });
+
+        if (error) {
+          console.error('Failed to save message:', error);
+        }
+      }
     } catch (error) {
       console.error('Failed to save messages:', error);
     }
-  }, []);
+  }, [userProfile?.id]);
 
   const saveMemory = useCallback(async (memory: UserMemory) => {
+    if (!userProfile?.id) return;
+
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.MEMORY, JSON.stringify(memory));
+      const { error } = await supabase
+        .from('user_memory')
+        .update({
+          name: memory.name || null,
+          preferences: memory.preferences,
+          important_facts: memory.importantFacts,
+          first_met_date: memory.firstMetDate,
+          last_active_date: memory.lastActiveDate,
+          stress_level: memory.stressLevel,
+          consecutive_stress_days: memory.consecutiveStressDays,
+          last_stress_date: memory.lastStressDate || null,
+          celebrated_milestones: memory.celebratedMilestones,
+          saved_moments: memory.savedMoments,
+          current_mood: currentMood,
+        })
+        .eq('user_id', userProfile.id);
+
+      if (error) {
+        console.error('Failed to save memory:', error);
+      }
     } catch (error) {
       console.error('Failed to save memory:', error);
     }
-  }, []);
+  }, [userProfile?.id, currentMood]);
 
   const addMessage = useCallback((message: Message) => {
     setMessages(prev => {
@@ -165,12 +245,21 @@ export const [ChatProvider, useChat] = createContextHook(() => {
 
   const changeMood = useCallback(async (mood: OviyaMood) => {
     setCurrentMood(mood);
+    if (!userProfile?.id) return;
+
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.MOOD, mood);
+      const { error } = await supabase
+        .from('user_memory')
+        .update({ current_mood: mood })
+        .eq('user_id', userProfile.id);
+
+      if (error) {
+        console.error('Failed to save mood:', error);
+      }
     } catch (error) {
       console.error('Failed to save mood:', error);
     }
-  }, []);
+  }, [userProfile?.id]);
 
   const detectStress = useCallback((message: string): boolean => {
     const stressKeywords = [
@@ -225,22 +314,36 @@ export const [ChatProvider, useChat] = createContextHook(() => {
     });
   }, [saveMemory]);
 
-  const addReaction = useCallback((messageId: string, emoji: string) => {
+  const addReaction = useCallback(async (messageId: string, emoji: string) => {
+    if (!userProfile?.id) return;
+
     setMessages(prev => {
       const updated = prev.map(msg => {
         if (msg.id === messageId) {
           const reactions = msg.reactions || [];
+          const newReactions = [...reactions, { emoji, timestamp: Date.now() }];
+          
+          supabase
+            .from('messages')
+            .update({ reactions: newReactions })
+            .eq('id', messageId)
+            .eq('user_id', userProfile.id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Failed to save reaction:', error);
+              }
+            });
+
           return {
             ...msg,
-            reactions: [...reactions, { emoji, timestamp: Date.now() }],
+            reactions: newReactions,
           };
         }
         return msg;
       });
-      saveMessages(updated);
       return updated;
     });
-  }, [saveMessages]);
+  }, [userProfile?.id]);
 
   const activateConversationGame = useCallback((game: ConversationGame | null) => {
     setActiveConversationGame(game);
