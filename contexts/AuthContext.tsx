@@ -2,6 +2,8 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import { supabase } from '../services/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { v4 as uuidv4 } from 'uuid';
 
 export type UserProfile = {
   id: string;
@@ -21,17 +23,13 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const [isLoading, setIsLoading] = useState(true);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
 
-  const createAnonymousUser = useCallback(async () => {
+  const createLocalUser = useCallback(async () => {
     try {
-      const { data, error } = await supabase.auth.signInAnonymously();
-
-      if (error || !data.user) {
-        console.error('Failed to create anonymous user:', error);
-        return;
-      }
-
+      console.log('Creating new local user...');
+      
+      const userId = uuidv4();
       const newProfile: UserProfile = {
-        id: data.user.id,
+        id: userId,
         avatarEmoji: '😊',
         createdAt: Date.now(),
         preferences: {
@@ -41,68 +39,97 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         },
       };
 
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: data.user.id,
-          avatar_emoji: newProfile.avatarEmoji,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          preferences: newProfile.preferences,
-          onboarding_completed: false,
-        });
+      await AsyncStorage.setItem('oviya_user_id', userId);
+      await AsyncStorage.setItem('oviya_user_profile', JSON.stringify(newProfile));
+      
+      try {
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            avatar_emoji: newProfile.avatarEmoji,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            preferences: newProfile.preferences,
+            onboarding_completed: false,
+          });
 
-      if (insertError) {
-        console.error('Failed to insert user:', insertError);
-      } else {
-        setUserProfile(newProfile);
-        setHasCompletedOnboarding(false);
-        router.replace('/onboarding');
+        if (insertError) {
+          console.error('Failed to insert user to Supabase (will continue with local):', insertError);
+        } else {
+          console.log('User synced to Supabase successfully');
+        }
+      } catch (supabaseError) {
+        console.error('Supabase sync failed (continuing with local storage):', supabaseError);
       }
+
+      setUserProfile(newProfile);
+      setHasCompletedOnboarding(false);
+      router.replace('/onboarding');
     } catch (error) {
-      console.error('Failed to create anonymous user:', error);
+      console.error('Failed to create local user:', error);
     }
   }, []);
 
   const initializeAuth = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log('Initializing auth...');
+      
+      const storedUserId = await AsyncStorage.getItem('oviya_user_id');
+      const storedProfile = await AsyncStorage.getItem('oviya_user_profile');
+      const onboardingCompleted = await AsyncStorage.getItem('oviya_onboarding_completed');
 
-      if (session?.user) {
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      if (storedUserId && storedProfile) {
+        console.log('Found stored user profile');
+        const profile: UserProfile = JSON.parse(storedProfile);
+        setUserProfile(profile);
+        setHasCompletedOnboarding(onboardingCompleted === 'true');
 
-        if (error) {
-          console.error('Failed to fetch user data:', error);
-          await createAnonymousUser();
-        } else if (userData) {
-          setUserProfile({
-            id: userData.id,
-            name: userData.name || undefined,
-            email: userData.email || undefined,
-            avatarEmoji: userData.avatar_emoji,
-            createdAt: new Date(userData.created_at).getTime(),
-            preferences: userData.preferences as UserProfile['preferences'],
-          });
-          setHasCompletedOnboarding(userData.onboarding_completed);
+        try {
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', storedUserId)
+            .maybeSingle();
 
-          if (!userData.onboarding_completed) {
-            router.replace('/onboarding');
+          if (userData) {
+            console.log('Syncing profile with Supabase data');
+            const syncedProfile: UserProfile = {
+              id: userData.id,
+              name: userData.name || undefined,
+              email: userData.email || undefined,
+              avatarEmoji: userData.avatar_emoji,
+              createdAt: new Date(userData.created_at).getTime(),
+              preferences: userData.preferences as UserProfile['preferences'],
+            };
+            setUserProfile(syncedProfile);
+            await AsyncStorage.setItem('oviya_user_profile', JSON.stringify(syncedProfile));
+            setHasCompletedOnboarding(userData.onboarding_completed);
+            
+            if (!userData.onboarding_completed && onboardingCompleted !== 'true') {
+              router.replace('/onboarding');
+            }
+          } else if (error) {
+            console.log('User not found in Supabase, continuing with local profile');
           }
+        } catch (supabaseError) {
+          console.error('Supabase sync failed (continuing with local profile):', supabaseError);
+        }
+
+        if (onboardingCompleted !== 'true') {
+          router.replace('/onboarding');
         }
       } else {
-        await createAnonymousUser();
+        console.log('No stored user found, creating new user');
+        await createLocalUser();
       }
     } catch (error) {
       console.error('Failed to initialize auth:', error);
-      await createAnonymousUser();
+      await createLocalUser();
     } finally {
       setIsLoading(false);
     }
-  }, [createAnonymousUser]);
+  }, [createLocalUser]);
 
   useEffect(() => {
     initializeAuth();
@@ -116,6 +143,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       const updated = { ...userProfile, ...updates };
       setUserProfile(updated);
+      
+      await AsyncStorage.setItem('oviya_user_profile', JSON.stringify(updated));
 
       try {
         const { error } = await supabase
@@ -125,14 +154,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             email: updated.email || null,
             avatar_emoji: updated.avatarEmoji,
             preferences: updated.preferences,
+            updated_at: new Date().toISOString(),
           })
           .eq('id', userProfile.id);
 
         if (error) {
-          console.error('Failed to update profile:', error);
+          console.log('Failed to sync profile update to Supabase:', error);
         }
       } catch (error) {
-        console.error('Failed to update profile:', error);
+        console.log('Supabase sync failed (profile saved locally):', error);
       }
     },
     [userProfile]
@@ -141,32 +171,44 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const completeOnboarding = useCallback(async () => {
     if (!userProfile) return;
 
+    setHasCompletedOnboarding(true);
+    await AsyncStorage.setItem('oviya_onboarding_completed', 'true');
+
     try {
       const { error } = await supabase
         .from('users')
-        .update({ onboarding_completed: true })
+        .update({ 
+          onboarding_completed: true,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', userProfile.id);
 
       if (error) {
-        console.error('Failed to complete onboarding:', error);
-      } else {
-        setHasCompletedOnboarding(true);
+        console.log('Failed to sync onboarding status to Supabase:', error);
       }
     } catch (error) {
-      console.error('Failed to complete onboarding:', error);
+      console.log('Supabase sync failed (onboarding saved locally):', error);
     }
   }, [userProfile]);
 
   const logout = useCallback(async () => {
     try {
       if (userProfile) {
-        await supabase.from('messages').delete().eq('user_id', userProfile.id);
-        await supabase.from('user_memory').delete().eq('user_id', userProfile.id);
-        await supabase.from('detected_strengths').delete().eq('user_id', userProfile.id);
-        await supabase.from('users').delete().eq('id', userProfile.id);
+        try {
+          await supabase.from('messages').delete().eq('user_id', userProfile.id);
+          await supabase.from('user_memory').delete().eq('user_id', userProfile.id);
+          await supabase.from('detected_strengths').delete().eq('user_id', userProfile.id);
+          await supabase.from('users').delete().eq('id', userProfile.id);
+          console.log('User data deleted from Supabase');
+        } catch (supabaseError) {
+          console.log('Failed to delete Supabase data (continuing with local cleanup):', supabaseError);
+        }
       }
 
-      await supabase.auth.signOut();
+      await AsyncStorage.removeItem('oviya_user_id');
+      await AsyncStorage.removeItem('oviya_user_profile');
+      await AsyncStorage.removeItem('oviya_onboarding_completed');
+      
       setUserProfile(null);
       setHasCompletedOnboarding(false);
       router.replace('/onboarding');
