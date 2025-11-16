@@ -17,7 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
-import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks } from '../services/oviya';
+import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks, useOviyaChat } from '../services/oviya';
 import { generateText } from '@rork-ai/toolkit-sdk';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
 import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
@@ -369,7 +369,7 @@ function ChatScreen() {
         return;
       }
       
-      const systemPrompt = buildSystemPrompt(userMemory, currentMood);
+      const systemPrompt = buildSystemPrompt(userMemory, currentMood, { activeGame: activeConversationGame });
       
       const conversationHistory = messages.slice(-10).map(msg => ({
         role: msg.role,

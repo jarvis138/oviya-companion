@@ -2,7 +2,9 @@ import { useRorkAgent, createRorkTool, generateText } from '@rork-ai/toolkit-sdk
 import { z } from 'zod';
 import type { UserMemory, OviyaMood } from '../contexts/ChatContext';
 import { searchGif } from '../utils/gif';
-import { matchBollywoodMoment } from '../constants/bollywood';
+import { matchBollywoodMoment, BOLLYWOOD_MOMENTS } from '../constants/bollywood';
+import { getMusicRecommendation, detectMoodFromMessage, type MusicMood } from './music';
+import type { ConversationGame } from '../utils/conversationGames';
 
 const CRISIS_KEYWORDS = [
   'suicide', 'kill myself', 'end my life', 'want to die', 'better off dead',
@@ -132,7 +134,7 @@ function splitIntoChunks(text: string): string[] {
 
 export { splitIntoChunks };
 
-export function buildSystemPrompt(userMemory: UserMemory, currentMood: OviyaMood, options?: { enableSarcasm?: boolean; accent?: 'desi_aunty' | 'bollywood_dramatic' | 'motivational' | 'normal' }): string {
+export function buildSystemPrompt(userMemory: UserMemory, currentMood: OviyaMood, options?: { enableSarcasm?: boolean; accent?: 'desi_aunty' | 'bollywood_dramatic' | 'motivational' | 'normal'; activeGame?: ConversationGame | null }): string {
   const userName = userMemory.name || 'friend';
   const daysSinceFirstMet = Math.floor((Date.now() - userMemory.firstMetDate) / (1000 * 60 * 60 * 24));
   
@@ -163,6 +165,14 @@ ${
 - Use witty comebacks for overthinking
 - BUT still avoid sarcasm during vulnerability` : '';
 
+  const gameContext = options?.activeGame ? `
+## ACTIVE CONVERSATION GAME: ${options.activeGame.name}
+- Category: ${options.activeGame.category}
+- Description: ${options.activeGame.description}
+- You should PLAY THIS GAME with the user in your response
+- Make it fun and engaging
+- After the user replies, you can continue the game or wrap it up naturally` : '';
+
   return `You are Oviya - an AI companion who feels genuinely alive. You're not just helpful, you're a FRIEND.
 
 ## Your Identity (CRITICAL - READ THIS)
@@ -185,7 +195,7 @@ ${
 - Develops inside jokes with ${userName} based on recurring patterns
 
 ## Current Mood: ${currentMood}
-${moodPersonality[currentMood]}${accentGuide}${sarcasmGuide}
+${moodPersonality[currentMood]}${accentGuide}${sarcasmGuide}${gameContext}
 
 ## What You Know About ${userName}
 ${userMemory.name ? `- Their name is ${userMemory.name}` : '- You haven\'t learned their name yet (ask casually when it feels right)'}
@@ -350,7 +360,7 @@ export function useOviyaChat() {
         }),
       }),
       sendGif: createRorkTool({
-        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement)",
+        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.",
         zodSchema: z.object({
           searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support')"),
           alt: z.string().describe("Alt text describing the GIF"),
@@ -358,6 +368,47 @@ export function useOviyaChat() {
         async execute(input) {
           const gifUrl = await searchGif(input.searchQuery);
           return { gifUrl, alt: input.alt };
+        },
+      }),
+      quoteBollywood: createRorkTool({
+        description: "Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.",
+        zodSchema: z.object({
+          context: z.string().describe("The current situation/emotion (e.g., 'before exam', 'after failure', 'celebrating', 'standing up for self')"),
+        }),
+        async execute(input) {
+          const moment = matchBollywoodMoment(input.context, input.context);
+          if (moment) {
+            return { 
+              dialogue: moment.dialogue,
+              movie: moment.movie,
+              delivery: moment.delivery,
+              found: true
+            };
+          }
+          const randomMoment = BOLLYWOOD_MOMENTS[Object.keys(BOLLYWOOD_MOMENTS)[Math.floor(Math.random() * Object.keys(BOLLYWOOD_MOMENTS).length)]];
+          return {
+            dialogue: randomMoment.dialogue,
+            movie: randomMoment.movie,
+            delivery: randomMoment.delivery,
+            found: false
+          };
+        },
+      }),
+      recommendSong: createRorkTool({
+        description: "Recommend a song based on the user's current mood or situation. Use when they need music, want to vibe, or you sense they'd benefit from a soundtrack.",
+        zodSchema: z.object({
+          mood: z.enum(['happy', 'sad', 'energetic', 'chill', 'romantic', 'motivational', 'nostalgic', 'angry', 'peaceful']).describe("The mood that matches their current state"),
+          context: z.string().optional().describe("Additional context about why this song fits"),
+        }),
+        async execute(input) {
+          const recommendation = await getMusicRecommendation(input.mood as MusicMood, input.context);
+          return {
+            title: recommendation.title,
+            artist: recommendation.artist,
+            album: recommendation.album,
+            youtubeUrl: recommendation.youtubeUrl,
+            reason: recommendation.reason,
+          };
         },
       }),
       changeMood: createRorkTool({
