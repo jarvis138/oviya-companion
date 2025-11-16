@@ -18,7 +18,6 @@ import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
 import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks, useOviyaChat } from '../services/oviya';
-import { generateText } from '@rork-ai/toolkit-sdk';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
 import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
 import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/monthlyLetter';
@@ -145,6 +144,8 @@ function ChatScreen() {
   const [showMoodPicker, setShowMoodPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+  
+  const oviyaAgent = useOviyaChat();
 
   const sendWelcomeMessageRef = useRef(false);
 
@@ -382,25 +383,78 @@ function ChatScreen() {
       const delay = simulateTypingDelay(inputText);
       await new Promise(resolve => setTimeout(resolve, delay));
 
-      const response = await generateText({
-        messages: [
-          { role: 'user' as const, content: systemPrompt },
-          ...conversationHistory.map(msg => ({
-            role: msg.role as 'user' | 'assistant',
-            content: msg.content,
-          })),
-          { role: 'user' as const, content: inputText.trim() },
-        ],
+      const result = await oviyaAgent.sendMessage({
+        text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
+      
+      let response = '';
+      const gifParts: { gifUrl?: string; url?: string; alt: string }[] = [];
+      const bollywoodParts: { dialogue: string; movie: string; delivery: string }[] = [];
+      const musicParts: { title: string; artist: string; youtubeUrl: string; reason: string }[] = [];
+      
+      for (const message of result.messages) {
+        if (message.role === 'assistant') {
+          for (const part of message.parts) {
+            if (part.type === 'text') {
+              response += part.text;
+            } else if (part.type === 'tool') {
+              if (part.state === 'output-available') {
+                if (part.toolName === 'sendGif' && part.output) {
+                  gifParts.push(part.output as { gifUrl?: string; url?: string; alt: string });
+                } else if (part.toolName === 'quoteBollywood' && part.output) {
+                  bollywoodParts.push(part.output as { dialogue: string; movie: string; delivery: string });
+                } else if (part.toolName === 'recommendSong' && part.output) {
+                  musicParts.push(part.output as { title: string; artist: string; youtubeUrl: string; reason: string });
+                } else if (part.toolName === 'rememberFact') {
+                  if (part.input && typeof part.input === 'object' && 'fact' in part.input) {
+                    addToMemory((part.input as { fact: string }).fact);
+                  }
+                } else if (part.toolName === 'changeMood') {
+                  if (part.input && typeof part.input === 'object' && 'mood' in part.input) {
+                    changeMood((part.input as { mood: typeof currentMood }).mood);
+                  }
+                } else if (part.toolName === 'spotStrength') {
+                  if (part.input && typeof part.input === 'object' && 'strength' in part.input) {
+                    const strengthInput = part.input as { strength: string; evidence: string; question: string };
+                    await saveSpottedStrength(strengthInput.strength, strengthInput.evidence);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
 
       const chunks = splitIntoChunks(response);
       console.log(`[ChatScreen] Split response into ${chunks.length} chunks`);
+      console.log(`[ChatScreen] GIFs: ${gifParts.length}, Bollywood: ${bollywoodParts.length}, Music: ${musicParts.length}`);
 
       if (chunks.length === 1) {
+        const messageParts: Message['parts'] = [
+          { type: 'text', text: response },
+          ...gifParts.map(gif => ({ type: 'gif' as const, url: (gif.gifUrl || gif.url) as string, alt: gif.alt })),
+        ];
+        
+        if (bollywoodParts.length > 0) {
+          const bollywood = bollywoodParts[0];
+          messageParts.push({
+            type: 'text',
+            text: `\n\n${bollywood.delivery || `"${bollywood.dialogue}" [${bollywood.movie}]`}`,
+          });
+        }
+        
+        if (musicParts.length > 0) {
+          const music = musicParts[0];
+          messageParts.push({
+            type: 'text',
+            text: `\n\n🎵 **${music.title}** by ${music.artist}\n${music.reason}\n[Listen on YouTube](${music.youtubeUrl})`,
+          });
+        }
+        
         const oviyaMessage: Message = {
           id: (Date.now() + 1).toString(),
           role: 'assistant',
-          parts: [{ type: 'text', text: response }],
+          parts: messageParts,
           timestamp: Date.now(),
         };
         addMessage(oviyaMessage);
@@ -412,10 +466,34 @@ function ChatScreen() {
             await new Promise(resolve => setTimeout(resolve, chunkDelay));
           }
 
+          const messageParts: Message['parts'] = [
+            { type: 'text', text: chunks[i] },
+          ];
+          
+          if (i === chunks.length - 1) {
+            messageParts.push(...gifParts.map(gif => ({ type: 'gif' as const, url: (gif.gifUrl || gif.url) as string, alt: gif.alt })));
+            
+            if (bollywoodParts.length > 0) {
+              const bollywood = bollywoodParts[0];
+              messageParts.push({
+                type: 'text',
+                text: `\n\n${bollywood.delivery || `"${bollywood.dialogue}" [${bollywood.movie}]`}`,
+              });
+            }
+            
+            if (musicParts.length > 0) {
+              const music = musicParts[0];
+              messageParts.push({
+                type: 'text',
+                text: `\n\n🎵 **${music.title}** by ${music.artist}\n${music.reason}\n[Listen on YouTube](${music.youtubeUrl})`,
+              });
+            }
+          }
+          
           const chunkMessage: Message = {
             id: `${Date.now()}-chunk-${i}`,
             role: 'assistant',
-            parts: [{ type: 'text', text: chunks[i] }],
+            parts: messageParts,
             timestamp: Date.now(),
           };
           addMessage(chunkMessage);
@@ -555,7 +633,7 @@ function ChatScreen() {
     } finally {
       setIsTyping(false);
     }
-  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking]);
+  }, [inputText, messages, userMemory, currentMood, addMessage, updateMemory, addToMemory, setIsTyping, detectStress, updateStressTracking, oviyaAgent, changeMood, addReaction, activeConversationGame]);
 
   const sendSticker = useCallback((sticker: string) => {
     if (Platform.OS !== 'web') {
