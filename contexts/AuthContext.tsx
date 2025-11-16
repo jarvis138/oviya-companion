@@ -3,6 +3,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+if (Platform.OS === 'web') {
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    const nodeCrypto = require('crypto');
+    (globalThis as any).crypto = {
+      getRandomValues: (arr: Uint8Array) => nodeCrypto.randomFillSync(arr),
+    };
+  }
+}
+
 import { v4 as uuidv4 } from 'uuid';
 
 export type UserProfile = {

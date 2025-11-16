@@ -387,6 +387,10 @@ function ChatScreen() {
         text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
       
+      if (!result || !result.messages || result.messages.length === 0) {
+        throw new Error('No response from agent');
+      }
+      
       let response = '';
       const gifParts: { gifUrl?: string; url?: string; alt: string }[] = [];
       const bollywoodParts: { dialogue: string; movie: string; delivery: string }[] = [];
