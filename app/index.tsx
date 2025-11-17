@@ -385,22 +385,33 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
+      console.log('[ChatScreen] Current messages before send:', oviyaAgent.messages?.length || 0);
+      
       await oviyaAgent.sendMessage({
         text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
       
-      const agentMessages = oviyaAgent.messages;
-      console.log('[ChatScreen] Agent messages count:', agentMessages?.length || 0);
+      console.log('[ChatScreen] Message sent, checking response...');
+      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
       
+      const agentMessages = oviyaAgent.messages;
       if (!agentMessages || agentMessages.length === 0) {
+        console.error('[ChatScreen] No messages in agent.messages array');
         throw new Error('No response from agent: messages array is empty');
       }
       
       const lastMessage = agentMessages[agentMessages.length - 1];
-      console.log('[ChatScreen] Processing last message:', JSON.stringify(lastMessage, null, 2));
+      console.log('[ChatScreen] Last message role:', lastMessage?.role);
+      console.log('[ChatScreen] Last message parts count:', lastMessage?.parts?.length || 0);
       
       if (!lastMessage) {
+        console.error('[ChatScreen] Last message is null or undefined');
         throw new Error('No response from agent: result is null or undefined');
+      }
+      
+      if (lastMessage.role !== 'assistant') {
+        console.error('[ChatScreen] Last message is not from assistant, role:', lastMessage.role);
+        throw new Error('No response from agent: last message is not from assistant');
       }
       
       let response = '';
