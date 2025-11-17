@@ -411,9 +411,8 @@ function ChatScreen() {
         body: JSON.stringify({
           systemPrompt,
           messages: conversationMessages,
-          tools: [
-            {
-              name: 'rememberFact',
+          tools: {
+            rememberFact: {
               description: 'Remember an important fact about the user',
               parameters: {
                 type: 'object',
@@ -423,8 +422,7 @@ function ChatScreen() {
                 required: ['fact']
               }
             },
-            {
-              name: 'sendGif',
+            sendGif: {
               description: 'Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.',
               parameters: {
                 type: 'object',
@@ -435,8 +433,7 @@ function ChatScreen() {
                 required: ['searchQuery', 'alt']
               }
             },
-            {
-              name: 'quoteBollywood',
+            quoteBollywood: {
               description: 'Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.',
               parameters: {
                 type: 'object',
@@ -446,8 +443,7 @@ function ChatScreen() {
                 required: ['context']
               }
             },
-            {
-              name: 'recommendSong',
+            recommendSong: {
               description: 'Recommend a song based on the user\'s current mood or situation. Use when they need music, want to vibe, or you sense they\'d benefit from a soundtrack.',
               parameters: {
                 type: 'object',
@@ -458,8 +454,7 @@ function ChatScreen() {
                 required: ['mood']
               }
             },
-            {
-              name: 'changeMood',
+            changeMood: {
               description: 'Change Oviya\'s current mood based on conversation',
               parameters: {
                 type: 'object',
@@ -469,8 +464,7 @@ function ChatScreen() {
                 required: ['mood']
               }
             },
-            {
-              name: 'spotStrength',
+            spotStrength: {
               description: 'When you notice a hidden strength or talent in the user, use this to highlight it',
               parameters: {
                 type: 'object',
@@ -482,7 +476,7 @@ function ChatScreen() {
                 required: ['strength', 'evidence', 'question']
               }
             }
-          ]
+          }
         })
       });
       
