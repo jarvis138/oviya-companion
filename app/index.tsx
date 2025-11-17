@@ -384,12 +384,23 @@ function ChatScreen() {
       const delay = simulateTypingDelay(inputText);
       await new Promise(resolve => setTimeout(resolve, delay));
 
+      console.log('[ChatScreen] Sending message to agent...');
       const result = await oviyaAgent.sendMessage({
         text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
       
-      if (!result || !result.messages || result.messages.length === 0) {
-        throw new Error('No response from agent');
+      console.log('[ChatScreen] Agent result:', JSON.stringify(result, null, 2));
+      
+      if (!result) {
+        throw new Error('No response from agent: result is null or undefined');
+      }
+      
+      if (!result.messages) {
+        throw new Error('No response from agent: messages array is missing');
+      }
+      
+      if (result.messages.length === 0) {
+        throw new Error('No response from agent: messages array is empty');
       }
       
       let response = '';
