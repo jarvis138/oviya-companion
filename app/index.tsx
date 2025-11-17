@@ -375,87 +375,77 @@ function ChatScreen() {
         return;
       }
       
-      const systemPrompt = buildSystemPrompt(userMemory, currentMood, { activeGame: activeConversationGame });
-      
-      const conversationHistory = messages.slice(-10).map(msg => ({
-        role: msg.role,
-        content: msg.parts
-          .filter(p => p.type === 'text')
-          .map(p => (p.type === 'text' ? p.text : ''))
-          .join('\n'),
-      }));
-
       const delay = simulateTypingDelay(inputText);
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
       
-      let result;
       try {
-        result = await oviyaAgent.sendMessage({
+        const result = await oviyaAgent.sendMessage({
           text: inputText.trim(),
         });
+        console.log('[ChatScreen] sendMessage result:', result);
       } catch (sendError) {
         console.error('[ChatScreen] Error during sendMessage:', sendError);
         throw new Error(`Failed to send message: ${sendError instanceof Error ? sendError.message : 'Unknown error'}`);
       }
       
-      console.log('[ChatScreen] Message sent, result:', result);
-      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
+      console.log('[ChatScreen] Waiting for agent response...');
       
-      // Poll for messages with timeout
+      // Wait for agent to finish processing
       let attempts = 0;
       const maxAttempts = 60; // 30 seconds total
-      let lastMessage = null;
       
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
+        attempts++;
         
-        const agentMessages = oviyaAgent.messages;
-        console.log(`[ChatScreen] Attempt ${attempts + 1}/${maxAttempts}: Status=${oviyaAgent.status}, Messages=${agentMessages?.length || 0}`);
+        console.log(`[ChatScreen] Attempt ${attempts}/${maxAttempts}: Status=${oviyaAgent.status}`);
         
         if (oviyaAgent.error) {
-          console.error('[ChatScreen] Agent has error:', oviyaAgent.error);
+          console.error('[ChatScreen] Agent error:', oviyaAgent.error);
           throw new Error(`Agent error: ${oviyaAgent.error}`);
         }
         
-        // Check if agent is done processing
-        if (oviyaAgent.status === 'ready' && agentMessages && agentMessages.length > 0) {
-          const potentialLastMessage = agentMessages[agentMessages.length - 1];
-          
-          // Check if this is an assistant message with content
-          if (potentialLastMessage.role === 'assistant' && potentialLastMessage.parts && potentialLastMessage.parts.length > 0) {
-            // Check if message has actual text content or completed tools
-            const hasContent = potentialLastMessage.parts.some(part => {
-              if (part.type === 'text' && part.text && part.text.trim().length > 0) {
-                return true;
-              }
-              if (part.type === 'tool') {
-                // Tool is complete if it has output or error
-                return part.state === 'output-available' || part.state === 'output-error';
-              }
-              return false;
-            });
-            
-            if (hasContent) {
-              lastMessage = potentialLastMessage;
-              console.log('[ChatScreen] Found complete assistant message');
-              break;
-            }
-          }
+        // Check if agent finished
+        if (oviyaAgent.status === 'ready') {
+          break;
         }
-        
-        attempts++;
       }
       
-      if (!lastMessage) {
-        console.error('[ChatScreen] No valid response after polling');
-        console.error('[ChatScreen] Final agent state:', JSON.stringify({
-          status: oviyaAgent.status,
-          messagesLength: oviyaAgent.messages?.length || 0,
-          error: oviyaAgent.error,
-        }));
-        throw new Error('No response from agent: timeout waiting for valid response');
+      if (oviyaAgent.status !== 'ready') {
+        throw new Error('Agent timeout: did not finish processing');
+      }
+      
+      console.log('[ChatScreen] Agent finished. Messages length:', oviyaAgent.messages?.length || 0);
+      
+      // Get the last message from agent
+      const agentMessages = oviyaAgent.messages || [];
+      if (agentMessages.length === 0) {
+        throw new Error('No response from agent: messages array is empty');
+      }
+      
+      const lastMessage = agentMessages[agentMessages.length - 1];
+      
+      if (!lastMessage || lastMessage.role !== 'assistant') {
+        throw new Error('No assistant response found');
+      }
+      
+      console.log('[ChatScreen] Processing assistant message with', lastMessage.parts?.length || 0, 'parts');
+      
+      // Check if message has content
+      const hasContent = lastMessage.parts?.some(part => {
+        if (part.type === 'text' && part.text && part.text.trim().length > 0) {
+          return true;
+        }
+        if (part.type === 'tool') {
+          return part.state === 'output-available' || part.state === 'output-error';
+        }
+        return false;
+      });
+      
+      if (!hasContent) {
+        throw new Error('Agent response has no content');
       }
       
       let response = '';
