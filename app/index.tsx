@@ -3,6 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2, Film, Music2, User } from 'lucide-react-native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { generateUUID } from '../utils/uuid';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -175,7 +176,7 @@ function ChatScreen() {
 
     if (anniversary.shouldCelebrate && anniversary.message) {
       const anniversaryMessage: Message = {
-        id: `anniversary-${Date.now()}`,
+        id: generateUUID(),
         role: 'assistant',
         parts: [{ type: 'text', text: anniversary.message }],
         timestamp: Date.now(),
@@ -203,7 +204,7 @@ function ChatScreen() {
       if (timeSinceLastMessage > 30 * 60 * 1000) {
         const { question, followUp } = getGoodNightPrompt();
         const goodNightMessage: Message = {
-          id: `goodnight-${Date.now()}`,
+          id: generateUUID(),
           role: 'assistant',
           parts: [
             {
@@ -227,7 +228,7 @@ function ChatScreen() {
           const letter = await generateMonthlyLetter(userMemory, messages);
           
           const letterNotification: Message = {
-            id: `letter-notification-${Date.now()}`,
+            id: generateUUID(),
             role: 'assistant',
             parts: [
               {
@@ -265,7 +266,7 @@ function ChatScreen() {
     const greeting = getGreetingForMood(currentMood);
     
     const greetingMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       role: 'assistant',
       parts: [
         {
@@ -285,7 +286,7 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, 1200));
 
       const introMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: generateUUID(),
         role: 'assistant',
         parts: [
           {
@@ -304,7 +305,7 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const questionMessage: Message = {
-        id: (Date.now() + 2).toString(),
+        id: generateUUID(),
         role: 'assistant',
         parts: [
           {
@@ -336,7 +337,7 @@ function ChatScreen() {
     }
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       role: 'user',
       parts: [{ type: 'text', text: inputText.trim() }],
       timestamp: Date.now(),
@@ -352,7 +353,7 @@ function ChatScreen() {
       
       if (isCrisis) {
         const crisisMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: generateUUID(),
           role: 'assistant',
           parts: [
             {
@@ -456,7 +457,7 @@ function ChatScreen() {
         }
         
         const oviyaMessage: Message = {
-          id: (Date.now() + 1).toString(),
+          id: generateUUID(),
           role: 'assistant',
           parts: messageParts,
           timestamp: Date.now(),
@@ -495,7 +496,7 @@ function ChatScreen() {
           }
           
           const chunkMessage: Message = {
-            id: `${Date.now()}-chunk-${i}`,
+            id: generateUUID(),
             role: 'assistant',
             parts: messageParts,
             timestamp: Date.now(),
@@ -522,9 +523,8 @@ function ChatScreen() {
         }, reactionDelay);
       }
       
-      const lastOviyaMessage = chunks.length === 1 ? 
-        messages.find(m => m.id === (Date.now() + 1).toString()) : 
-        messages.find(m => m.id === `${Date.now()}-chunk-${chunks.length - 1}`);
+      const lastOviyaMessageIndex = messages.length + chunks.length - 1;
+      const lastOviyaMessage = messages[lastOviyaMessageIndex];
       
       const userReactsToOviya = shouldUserReactToOviya(fullResponse);
       if (userReactsToOviya.shouldReact && lastOviyaMessage) {
@@ -576,7 +576,7 @@ function ChatScreen() {
           if (matchingPattern && matchingPattern.count >= 3 && matchingPattern.count <= 4) {
             setTimeout(() => {
               const strengthMessage: Message = {
-                id: `strength-${Date.now()}`,
+                id: generateUUID(),
                 role: 'assistant',
                 parts: [
                   {
@@ -603,7 +603,7 @@ function ChatScreen() {
         if (carePackage) {
           setTimeout(() => {
             const careMessage: Message = {
-              id: `care-${Date.now()}`,
+              id: generateUUID(),
               role: 'assistant',
               parts: [
                 {
@@ -622,7 +622,7 @@ function ChatScreen() {
       console.error('Error getting response:', error);
       
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: generateUUID(),
         role: 'assistant',
         parts: [
           {
@@ -645,7 +645,7 @@ function ChatScreen() {
     }
 
     const stickerMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUUID(),
       role: 'user',
       parts: [{ type: 'sticker', emoji: sticker }],
       timestamp: Date.now(),
@@ -831,7 +831,7 @@ function ChatScreen() {
                     changeMood(mood);
                     setShowMoodPicker(false);
                     const moodMessage: Message = {
-                      id: `mood-${Date.now()}`,
+                      id: generateUUID(),
                       role: 'assistant',
                       parts: [{
                         type: 'text',
