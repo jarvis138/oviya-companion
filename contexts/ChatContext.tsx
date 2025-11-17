@@ -147,11 +147,11 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         });
 
         if (error) {
-          console.error('Failed to create initial memory:', error);
+          console.error('Failed to create initial memory:', error.message || JSON.stringify(error));
         }
       }
     } catch (error) {
-      console.error('Failed to load data:', error);
+      console.error('Failed to load data:', error instanceof Error ? error.message : JSON.stringify(error));
     } finally {
       setIsLoading(false);
     }
@@ -177,11 +177,11 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         });
 
         if (error) {
-          console.error('Failed to save message:', error);
+          console.error('Failed to save message:', error.message || JSON.stringify(error));
         }
       }
     } catch (error) {
-      console.error('Failed to save messages:', error);
+      console.error('Failed to save messages:', error instanceof Error ? error.message : JSON.stringify(error));
     }
   }, [userProfile?.id]);
 
@@ -207,10 +207,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         .eq('user_id', userProfile.id);
 
       if (error) {
-        console.error('Failed to save memory:', error);
+        console.error('Failed to save memory:', error.message || JSON.stringify(error));
       }
     } catch (error) {
-      console.error('Failed to save memory:', error);
+      console.error('Failed to save memory:', error instanceof Error ? error.message : JSON.stringify(error));
     }
   }, [userProfile?.id, currentMood]);
 
@@ -254,10 +254,10 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         .eq('user_id', userProfile.id);
 
       if (error) {
-        console.error('Failed to save mood:', error);
+        console.error('Failed to save mood:', error.message || JSON.stringify(error));
       }
     } catch (error) {
-      console.error('Failed to save mood:', error);
+      console.error('Failed to save mood:', error instanceof Error ? error.message : JSON.stringify(error));
     }
   }, [userProfile?.id]);
 
@@ -330,7 +330,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
             .eq('user_id', userProfile.id)
             .then(({ error }) => {
               if (error) {
-                console.error('Failed to save reaction:', error);
+                console.error('Failed to save reaction:', error.message || JSON.stringify(error));
               }
             });
 
