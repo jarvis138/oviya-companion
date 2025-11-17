@@ -17,7 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
-import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
+import { useChat, type Message } from '../contexts/ChatContext';
 import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks, useOviyaChat } from '../services/oviya';
 import { searchGif } from '../utils/gif';
 import { matchBollywoodMoment } from '../constants/bollywood';
@@ -126,6 +126,12 @@ function shouldUserReactToOviya(oviyaMessage: string): { shouldReact: boolean; e
 }
 
 function ChatScreen() {
+  // Validate required environment variables
+  const TOOLKIT_URL = process.env.EXPO_PUBLIC_TOOLKIT_URL;
+  if (!TOOLKIT_URL) {
+    console.error('EXPO_PUBLIC_TOOLKIT_URL is not set in environment variables');
+  }
+
   const {
     messages,
     userMemory,
@@ -189,7 +195,7 @@ function ChatScreen() {
         timestamp: Date.now(),
       };
 
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         addMessage(anniversaryMessage);
         if (anniversary.milestone) {
           updateMemory({
@@ -200,6 +206,8 @@ function ChatScreen() {
           });
         }
       }, 3000);
+
+      return () => clearTimeout(timeoutId);
     }
   }, [userMemory.firstMetDate, userMemory.celebratedMilestones, addMessage, updateMemory]);
 
@@ -228,12 +236,14 @@ function ChatScreen() {
   }, [messages, addMessage]);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | undefined;
+
     const checkMonthlyLetter = async () => {
       const shouldGenerate = await shouldGenerateMonthlyLetter();
       if (shouldGenerate && messages.length > 20) {
         try {
           const letter = await generateMonthlyLetter(userMemory, messages);
-          
+
           const letterNotification: Message = {
             id: generateUUID(),
             role: 'assistant',
@@ -245,8 +255,8 @@ function ChatScreen() {
             ],
             timestamp: Date.now(),
           };
-          
-          setTimeout(() => {
+
+          timeoutId = setTimeout(() => {
             addMessage(letterNotification);
           }, 2000);
         } catch (error) {
@@ -258,12 +268,20 @@ function ChatScreen() {
     if (messages.length > 0) {
       checkMonthlyLetter();
     }
-  }, [userMemory.lastActiveDate]);
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [userMemory.lastActiveDate, messages.length, userMemory, addMessage]);
 
   useEffect(() => {
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+
+    return () => clearTimeout(timeoutId);
   }, [messages, isTyping]);
 
   const sendWelcomeMessage = async () => {
@@ -403,7 +421,10 @@ function ChatScreen() {
       console.log('[ChatScreen] Calling agent API with', conversationMessages.length, 'messages');
       
       // Call the agent API directly
-      const agentResponse = await fetch(new URL("/agent/chat", process.env["EXPO_PUBLIC_TOOLKIT_URL"]).toString(), {
+      if (!TOOLKIT_URL) {
+        throw new Error('EXPO_PUBLIC_TOOLKIT_URL environment variable is not set');
+      }
+      const agentResponse = await fetch(new URL("/agent/chat", TOOLKIT_URL).toString(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1048,11 +1069,7 @@ function ChatScreen() {
 }
 
 export default function Index() {
-  return (
-    <ChatProvider>
-      <ChatScreen />
-    </ChatProvider>
-  );
+  return <ChatScreen />;
 }
 
 const styles = StyleSheet.create({

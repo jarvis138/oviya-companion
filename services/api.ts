@@ -1,6 +1,16 @@
-const GIPHY_API_KEY = 'l3MLtCTvVv9rxfVd3T6XaEmxuZjF2quS';
-const TMDB_API_KEY = 'bb6444cf69a7114d8720ef5859d2722c';
-const TMDB_READ_ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiYjY0NDRjZjY5YTcxMTRkODcyMGVmNTg1OWQyNzIyYyIsIm5iZiI6MTc2MjE5NjUyNy43MzIsInN1YiI6IjY5MDhmYzJmYWYwODI0MTQxM2RkOGI3MCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.Ub4ZHtBJJbxuddcejWETYfNjPJw66HtcuXkQ0_8hWR8';
+// Get API keys from environment variables
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY;
+const TMDB_API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY;
+const TMDB_READ_ACCESS_TOKEN = process.env.EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN;
+
+// Validate required API keys
+if (!GIPHY_API_KEY) {
+  console.error('EXPO_PUBLIC_GIPHY_API_KEY is not set in environment variables');
+}
+
+if (!TMDB_READ_ACCESS_TOKEN) {
+  console.error('EXPO_PUBLIC_TMDB_READ_ACCESS_TOKEN is not set in environment variables');
+}
 
 export type GiphyGif = {
   id: string;

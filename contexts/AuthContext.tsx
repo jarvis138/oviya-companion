@@ -92,9 +92,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (storedUserId && storedProfile) {
         console.log('Found stored user profile');
-        const profile: UserProfile = JSON.parse(storedProfile);
-        setUserProfile(profile);
-        setHasCompletedOnboarding(onboardingCompleted === 'true');
+        try {
+          const profile: UserProfile = JSON.parse(storedProfile);
+          setUserProfile(profile);
+          setHasCompletedOnboarding(onboardingCompleted === 'true');
+        } catch (error) {
+          console.error('Failed to parse stored user profile, creating new profile:', error);
+          await AsyncStorage.removeItem('oviya_user_profile');
+          await AsyncStorage.removeItem('oviya_user_id');
+          await createLocalUser();
+          return;
+        }
 
         try {
           const { data: userData, error } = await supabase

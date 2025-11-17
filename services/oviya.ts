@@ -6,9 +6,19 @@ import { matchBollywoodMoment, BOLLYWOOD_MOMENTS } from '../constants/bollywood'
 import { getMusicRecommendation, type MusicMood } from './music';
 import type { ConversationGame } from '../utils/conversationGames';
 
-const CRISIS_KEYWORDS = [
-  'suicide', 'kill myself', 'end my life', 'want to die', 'better off dead',
-  'self harm', 'cut myself', 'hurt myself', 'no point living',
+// Use regex patterns with word boundaries to avoid false positives
+const CRISIS_PATTERNS = [
+  /\b(suicide|suicidal)\b/i,
+  /\bkill myself\b/i,
+  /\bend (my|this) life\b/i,
+  /\bwant to die\b/i,
+  /\bbetter off dead\b/i,
+  /\bself[- ]?harm(ing)?\b/i,
+  /\bcut myself\b/i,
+  /\bhurt myself\b/i,
+  /\bno point (in )?living\b/i,
+  /\bcan'?t go on\b/i,
+  /\bdon'?t want to (be|live|exist)\b/i,
 ];
 
 const MOOD_GREETINGS = {
@@ -54,8 +64,7 @@ const ACCENT_TEMPLATES = {
 };
 
 export function detectCrisis(text: string): boolean {
-  const lowerText = text.toLowerCase();
-  return CRISIS_KEYWORDS.some(keyword => lowerText.includes(keyword));
+  return CRISIS_PATTERNS.some(pattern => pattern.test(text));
 }
 
 export function getGreetingForMood(mood: OviyaMood): string {
