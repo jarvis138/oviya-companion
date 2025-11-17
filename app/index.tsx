@@ -19,6 +19,9 @@ import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
 import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks, useOviyaChat } from '../services/oviya';
+import { searchGif } from '../utils/gif';
+import { matchBollywoodMoment } from '../constants/bollywood';
+import { getMusicRecommendation } from '../services/music';
 import { checkAnniversary, generateCarePackage, shouldShowGoodNightRitual, getGoodNightPrompt } from '../utils/carePackages';
 import { saveSpottedStrength, getStrengthPatterns } from '../utils/strengthTracking';
 import { shouldGenerateMonthlyLetter, generateMonthlyLetter } from '../utils/monthlyLetter';
@@ -378,123 +381,166 @@ function ChatScreen() {
       const delay = simulateTypingDelay(inputText);
       await new Promise(resolve => setTimeout(resolve, delay));
 
-      console.log('[ChatScreen] Sending message to agent...');
-      console.log('[ChatScreen] Agent status before send:', oviyaAgent.status);
-      console.log('[ChatScreen] Agent messages before send:', oviyaAgent.messages?.length || 0);
+      console.log('[ChatScreen] Sending message to agent API...');
       
-      // Send the message and wait for response
-      await oviyaAgent.sendMessage({
-        text: inputText.trim(),
+      // Prepare messages history for the API
+      const conversationMessages = messages.map(msg => ({
+        role: msg.role,
+        content: msg.parts.map(part => {
+          if (part.type === 'text') {
+            return { type: 'text' as const, text: part.text };
+          }
+          return part;
+        }).filter(p => p.type === 'text')
+      }));
+      
+      // Add the current user message
+      conversationMessages.push({
+        role: 'user' as const,
+        content: [{ type: 'text' as const, text: inputText.trim() }]
       });
       
-      console.log('[ChatScreen] sendMessage call completed');
-      console.log('[ChatScreen] Agent status after send:', oviyaAgent.status);
-      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
+      console.log('[ChatScreen] Calling agent API with', conversationMessages.length, 'messages');
       
-      // Wait for the agent to process
-      // Poll until status is ready or we timeout
-      let attempts = 0;
-      const maxAttempts = 60; // 30 seconds
-      
-      while (attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        attempts++;
-        
-        console.log(`[ChatScreen] Poll attempt ${attempts}:`, {
-          status: oviyaAgent.status,
-          messagesCount: oviyaAgent.messages?.length || 0,
-          error: oviyaAgent.error || 'none'
-        });
-        
-        // Check for errors
-        if (oviyaAgent.error) {
-          console.error('[ChatScreen] Agent error:', oviyaAgent.error);
-          throw new Error(`Agent error: ${oviyaAgent.error}`);
-        }
-        
-        // Wait until status is ready
-        if (oviyaAgent.status === 'ready') {
-          console.log('[ChatScreen] Agent ready, checking messages...');
-          break;
-        }
-      }
-      
-      // Check if we timed out
-      if (oviyaAgent.status !== 'ready') {
-        console.error('[ChatScreen] Timeout waiting for agent');
-        throw new Error('Agent timeout: still processing after 30 seconds');
-      }
-      
-      // Get the last message from the agent
-      const agentMessages = oviyaAgent.messages || [];
-      console.log('[ChatScreen] Agent messages:', agentMessages.length);
-      
-      if (agentMessages.length === 0) {
-        console.error('[ChatScreen] No messages from agent');
-        throw new Error('No response from agent');
-      }
-      
-      // Find the last assistant message
-      const lastMessage = agentMessages[agentMessages.length - 1];
-      console.log('[ChatScreen] Last message:', {
-        role: lastMessage?.role,
-        partsCount: lastMessage?.parts?.length
+      // Call the agent API directly
+      const agentResponse = await fetch(new URL("/agent/chat", process.env["EXPO_PUBLIC_TOOLKIT_URL"]).toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          systemPrompt,
+          messages: conversationMessages,
+          tools: [
+            {
+              name: 'rememberFact',
+              description: 'Remember an important fact about the user',
+              parameters: {
+                type: 'object',
+                properties: {
+                  fact: { type: 'string', description: 'Important fact to remember about the user' }
+                },
+                required: ['fact']
+              }
+            },
+            {
+              name: 'sendGif',
+              description: 'Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  searchQuery: { type: 'string', description: 'What emotion/reaction to search for (e.g. "celebration", "hug", "laughter", "excited", "support")' },
+                  alt: { type: 'string', description: 'Alt text describing the GIF' }
+                },
+                required: ['searchQuery', 'alt']
+              }
+            },
+            {
+              name: 'quoteBollywood',
+              description: 'Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  context: { type: 'string', description: 'The current situation/emotion (e.g., "before exam", "after failure", "celebrating", "standing up for self")' }
+                },
+                required: ['context']
+              }
+            },
+            {
+              name: 'recommendSong',
+              description: 'Recommend a song based on the user\'s current mood or situation. Use when they need music, want to vibe, or you sense they\'d benefit from a soundtrack.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  mood: { type: 'string', enum: ['happy', 'sad', 'energetic', 'chill', 'romantic', 'motivational', 'nostalgic', 'angry', 'peaceful'], description: 'The mood that matches their current state' },
+                  context: { type: 'string', description: 'Additional context about why this song fits' }
+                },
+                required: ['mood']
+              }
+            },
+            {
+              name: 'changeMood',
+              description: 'Change Oviya\'s current mood based on conversation',
+              parameters: {
+                type: 'object',
+                properties: {
+                  mood: { type: 'string', enum: ['playful', 'reflective', 'energetic', 'cozy', 'caring'], description: 'New mood to adopt' }
+                },
+                required: ['mood']
+              }
+            },
+            {
+              name: 'spotStrength',
+              description: 'When you notice a hidden strength or talent in the user, use this to highlight it',
+              parameters: {
+                type: 'object',
+                properties: {
+                  strength: { type: 'string', description: 'The strength/talent observed (e.g., "clear communication", "emotional wisdom", "teaching ability")' },
+                  evidence: { type: 'string', description: 'Specific example that demonstrates this strength' },
+                  question: { type: 'string', description: 'A reflective question to help them explore this strength further' }
+                },
+                required: ['strength', 'evidence', 'question']
+              }
+            }
+          ]
+        })
       });
       
-      if (!lastMessage || lastMessage.role !== 'assistant') {
-        console.error('[ChatScreen] Last message is not from assistant');
-        throw new Error('No assistant response found');
+      if (!agentResponse.ok) {
+        const errorText = await agentResponse.text();
+        console.error('[ChatScreen] Agent API error:', agentResponse.status, errorText);
+        throw new Error(`Agent API error: ${agentResponse.status} - ${errorText}`);
       }
       
-      // Validate message has content
-      const hasContent = lastMessage.parts?.some((part: any) => {
-        if (part.type === 'text' && part.text && part.text.trim().length > 0) {
-          return true;
-        }
-        if (part.type === 'tool') {
-          return part.state === 'output-available' || part.state === 'output-error';
-        }
-        return false;
-      });
+      const agentResult = await agentResponse.json();
+      console.log('[ChatScreen] Got agent response');
       
-      if (!hasContent) {
-        console.error('[ChatScreen] Message has no content');
-        throw new Error('Agent response has no content');
+      if (!agentResult.message || !agentResult.message.content) {
+        console.error('[ChatScreen] Invalid agent response:', agentResult);
+        throw new Error('Invalid agent response format');
       }
       
-      console.log('[ChatScreen] Processing message with', lastMessage.parts?.length || 0, 'parts');
-      
+      // Parse the agent's response
       let response = '';
       const gifParts: { gifUrl?: string; url?: string; alt: string }[] = [];
       const bollywoodParts: { dialogue: string; movie: string; delivery: string }[] = [];
       const musicParts: { title: string; artist: string; youtubeUrl: string; reason: string }[] = [];
       
-      if (lastMessage.role === 'assistant') {
-        for (const part of lastMessage.parts) {
+      // Extract text and tool calls from the response
+      if (typeof agentResult.message.content === 'string') {
+        response = agentResult.message.content;
+      } else if (Array.isArray(agentResult.message.content)) {
+        for (const part of agentResult.message.content) {
           if (part.type === 'text') {
             response += part.text;
-          } else if (part.type === 'tool') {
-            if (part.state === 'output-available') {
-              if (part.toolName === 'sendGif' && part.output) {
-                gifParts.push(part.output as { gifUrl?: string; url?: string; alt: string });
-              } else if (part.toolName === 'quoteBollywood' && part.output) {
-                bollywoodParts.push(part.output as { dialogue: string; movie: string; delivery: string });
-              } else if (part.toolName === 'recommendSong' && part.output) {
-                musicParts.push(part.output as { title: string; artist: string; youtubeUrl: string; reason: string });
-              } else if (part.toolName === 'rememberFact') {
-                if (part.input && typeof part.input === 'object' && 'fact' in part.input) {
-                  addToMemory((part.input as { fact: string }).fact);
-                }
-              } else if (part.toolName === 'changeMood') {
-                if (part.input && typeof part.input === 'object' && 'mood' in part.input) {
-                  changeMood((part.input as { mood: typeof currentMood }).mood);
-                }
-              } else if (part.toolName === 'spotStrength') {
-                if (part.input && typeof part.input === 'object' && 'strength' in part.input) {
-                  const strengthInput = part.input as { strength: string; evidence: string; question: string };
-                  await saveSpottedStrength(strengthInput.strength, strengthInput.evidence);
-                }
+          } else if (part.type === 'tool-call' && part.toolName) {
+            // Handle tool calls
+            if (part.toolName === 'sendGif' && part.args) {
+              const gifUrl = await searchGif(part.args.searchQuery);
+              if (gifUrl) {
+                gifParts.push({ gifUrl, alt: part.args.alt });
               }
+            } else if (part.toolName === 'quoteBollywood' && part.args) {
+              const moment = matchBollywoodMoment(part.args.context, part.args.context);
+              if (moment) {
+                bollywoodParts.push(moment);
+              }
+            } else if (part.toolName === 'recommendSong' && part.args) {
+              const recommendation = await getMusicRecommendation(part.args.mood, part.args.context);
+              if (recommendation.youtubeUrl) {
+                musicParts.push({
+                  title: recommendation.title,
+                  artist: recommendation.artist,
+                  youtubeUrl: recommendation.youtubeUrl,
+                  reason: recommendation.reason
+                });
+              }
+            } else if (part.toolName === 'rememberFact' && part.args) {
+              addToMemory(part.args.fact);
+            } else if (part.toolName === 'changeMood' && part.args) {
+              changeMood(part.args.mood);
+            } else if (part.toolName === 'spotStrength' && part.args) {
+              await saveSpottedStrength(part.args.strength, part.args.evidence);
             }
           }
         }
