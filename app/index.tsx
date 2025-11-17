@@ -396,15 +396,19 @@ function ChatScreen() {
         throw new Error('No response from agent: messages array is empty');
       }
       
+      const lastMessage = agentMessages[agentMessages.length - 1];
+      console.log('[ChatScreen] Processing last message:', JSON.stringify(lastMessage, null, 2));
+      
+      if (!lastMessage) {
+        throw new Error('No response from agent: result is null or undefined');
+      }
+      
       let response = '';
       const gifParts: { gifUrl?: string; url?: string; alt: string }[] = [];
       const bollywoodParts: { dialogue: string; movie: string; delivery: string }[] = [];
       const musicParts: { title: string; artist: string; youtubeUrl: string; reason: string }[] = [];
       
-      const lastMessage = agentMessages[agentMessages.length - 1];
-      console.log('[ChatScreen] Processing last message:', JSON.stringify(lastMessage, null, 2));
-      
-      if (lastMessage && lastMessage.role === 'assistant') {
+      if (lastMessage.role === 'assistant') {
         for (const part of lastMessage.parts) {
           if (part.type === 'text') {
             response += part.text;
