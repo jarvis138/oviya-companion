@@ -131,7 +131,7 @@ export const [ChatProvider, useChat] = createContextHook(() => {
         };
         setUserMemory(initialMemory);
 
-        const { error } = await supabase.from('user_memory').insert({
+        const { error } = await supabase.from('user_memory').upsert({
           user_id: userProfile.id,
           name: null,
           preferences: {},
@@ -144,6 +144,9 @@ export const [ChatProvider, useChat] = createContextHook(() => {
           celebrated_milestones: [],
           saved_moments: [],
           current_mood: 'caring',
+        }, {
+          onConflict: 'user_id',
+          ignoreDuplicates: false,
         });
 
         if (error) {
