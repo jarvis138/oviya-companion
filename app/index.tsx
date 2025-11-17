@@ -2,7 +2,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Heart, Send, Smile, Sparkles, Bookmark, Menu, TrendingUp, Mail, Gamepad2, Film, Music2, User } from 'lucide-react-native';
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { generateUUID } from '../utils/uuid';
 import {
   FlatList,
@@ -146,7 +146,11 @@ function ChatScreen() {
   const [showMenu, setShowMenu] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   
-  const oviyaAgent = useOviyaChat();
+  const systemPrompt = useMemo(() => {
+    return buildSystemPrompt(userMemory, currentMood, { activeGame: activeConversationGame });
+  }, [userMemory, currentMood, activeConversationGame]);
+  
+  const oviyaAgent = useOviyaChat(systemPrompt);
 
   const sendWelcomeMessageRef = useRef(false);
 
@@ -385,40 +389,38 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
-      console.log('[ChatScreen] Agent state before send:', {
-        messagesLength: oviyaAgent.messages?.length || 0,
-        hasError: !!oviyaAgent.error,
-        error: oviyaAgent.error,
-      });
       
+      let result;
       try {
-        await oviyaAgent.sendMessage({
-          text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
+        result = await oviyaAgent.sendMessage({
+          text: inputText.trim(),
         });
       } catch (sendError) {
         console.error('[ChatScreen] Error during sendMessage:', sendError);
         throw new Error(`Failed to send message: ${sendError instanceof Error ? sendError.message : 'Unknown error'}`);
       }
       
-      console.log('[ChatScreen] Message sent, waiting for response...');
+      console.log('[ChatScreen] Message sent, result:', result);
+      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
       
       // Poll for messages with timeout
       let attempts = 0;
-      const maxAttempts = 30; // 15 seconds total
+      const maxAttempts = 60; // 30 seconds total
       let lastMessage = null;
       
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         
         const agentMessages = oviyaAgent.messages;
-        console.log(`[ChatScreen] Attempt ${attempts + 1}: Messages length = ${agentMessages?.length || 0}`);
+        console.log(`[ChatScreen] Attempt ${attempts + 1}/${maxAttempts}: Status=${oviyaAgent.status}, Messages=${agentMessages?.length || 0}`);
         
         if (oviyaAgent.error) {
           console.error('[ChatScreen] Agent has error:', oviyaAgent.error);
           throw new Error(`Agent error: ${oviyaAgent.error}`);
         }
         
-        if (agentMessages && agentMessages.length > 0) {
+        // Check if agent is done processing
+        if (oviyaAgent.status === 'ready' && agentMessages && agentMessages.length > 0) {
           const potentialLastMessage = agentMessages[agentMessages.length - 1];
           
           // Check if this is an assistant message with content
@@ -449,11 +451,10 @@ function ChatScreen() {
       if (!lastMessage) {
         console.error('[ChatScreen] No valid response after polling');
         console.error('[ChatScreen] Final agent state:', JSON.stringify({
-          messagesLength: oviyaAgent.messages?.length || 0,
-          messages: oviyaAgent.messages,
           status: oviyaAgent.status,
+          messagesLength: oviyaAgent.messages?.length || 0,
           error: oviyaAgent.error,
-        }, null, 2));
+        }));
         throw new Error('No response from agent: timeout waiting for valid response');
       }
       

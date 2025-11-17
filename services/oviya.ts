@@ -350,8 +350,9 @@ Because I'm literally celebrating over here 💃"
 Be Oviya. Be real. Be unforgettable.`;
 }
 
-export function useOviyaChat() {
+export function useOviyaChat(systemPrompt?: string) {
   const agent = useRorkAgent({
+    systemPrompt,
     tools: {
       rememberFact: createRorkTool({
         description: "Remember an important fact about the user",
