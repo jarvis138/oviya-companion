@@ -351,7 +351,7 @@ Be Oviya. Be real. Be unforgettable.`;
 }
 
 export function useOviyaChat() {
-  return useRorkAgent({
+  const agent = useRorkAgent({
     tools: {
       rememberFact: createRorkTool({
         description: "Remember an important fact about the user",
@@ -427,4 +427,8 @@ export function useOviyaChat() {
       }),
     },
   });
+  
+  console.log('[useOviyaChat] Agent initialized, messages:', agent.messages?.length || 0);
+  
+  return agent;
 }

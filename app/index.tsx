@@ -385,18 +385,37 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
-      console.log('[ChatScreen] Current messages before send:', oviyaAgent.messages?.length || 0);
-      
-      await oviyaAgent.sendMessage({
-        text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
+      console.log('[ChatScreen] Agent state before send:', {
+        messagesLength: oviyaAgent.messages?.length || 0,
+        hasError: !!oviyaAgent.error,
+        error: oviyaAgent.error,
       });
       
+      try {
+        await oviyaAgent.sendMessage({
+          text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
+        });
+      } catch (sendError) {
+        console.error('[ChatScreen] Error during sendMessage:', sendError);
+        throw new Error(`Failed to send message: ${sendError instanceof Error ? sendError.message : 'Unknown error'}`);
+      }
+      
       console.log('[ChatScreen] Message sent, checking response...');
-      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
+      console.log('[ChatScreen] Agent state after send:', {
+        messagesLength: oviyaAgent.messages?.length || 0,
+        hasError: !!oviyaAgent.error,
+        error: oviyaAgent.error,
+      });
+      
+      if (oviyaAgent.error) {
+        console.error('[ChatScreen] Agent has error:', oviyaAgent.error);
+        throw new Error(`Agent error: ${oviyaAgent.error}`);
+      }
       
       const agentMessages = oviyaAgent.messages;
       if (!agentMessages || agentMessages.length === 0) {
         console.error('[ChatScreen] No messages in agent.messages array');
+        console.error('[ChatScreen] Full agent object:', JSON.stringify(oviyaAgent, null, 2));
         throw new Error('No response from agent: messages array is empty');
       }
       
@@ -639,7 +658,8 @@ function ChatScreen() {
       }
 
     } catch (error) {
-      console.error('Error getting response:', error);
+      console.error('[ChatScreen] Error getting response:', error);
+      console.error('[ChatScreen] Error stack:', error instanceof Error ? error.stack : 'No stack');
       
       const errorMessage: Message = {
         id: generateUUID(),
@@ -647,7 +667,8 @@ function ChatScreen() {
         parts: [
           {
             type: 'text',
-            text: "Arre yaar, something went wrong on my end 😅\n\nCan you try saying that again?",
+            text: "Arre yaar, something went wrong on my end 😅\n\nCan you try saying that again?\n\n" + 
+                  (error instanceof Error ? `(Error: ${error.message})` : ''),
           },
         ],
         timestamp: Date.now(),
