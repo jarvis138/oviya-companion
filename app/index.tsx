@@ -379,90 +379,74 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
+      console.log('[ChatScreen] Agent status before send:', oviyaAgent.status);
+      console.log('[ChatScreen] Agent messages before send:', oviyaAgent.messages?.length || 0);
       
-      // Store the initial message count
-      const initialMessageCount = oviyaAgent.messages?.length || 0;
-      console.log('[ChatScreen] Initial message count:', initialMessageCount);
-      
-      // Send the message
+      // Send the message and wait for response
       await oviyaAgent.sendMessage({
         text: inputText.trim(),
       });
       
       console.log('[ChatScreen] sendMessage call completed');
+      console.log('[ChatScreen] Agent status after send:', oviyaAgent.status);
+      console.log('[ChatScreen] Agent messages after send:', oviyaAgent.messages?.length || 0);
       
-      // Wait for the agent to actually process and add messages
-      // We'll poll until we see a new message
+      // Wait for the agent to process
+      // Poll until status is ready or we timeout
       let attempts = 0;
-      const maxAttempts = 100; // 50 seconds
-      let lastMessage: any = null;
+      const maxAttempts = 60; // 30 seconds
       
       while (attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 500));
         attempts++;
         
-        const currentMessageCount = oviyaAgent.messages?.length || 0;
-        console.log(`[ChatScreen] Attempt ${attempts}: Messages=${currentMessageCount}, Status=${oviyaAgent.status}, Error=${oviyaAgent.error || 'none'}`);
+        console.log(`[ChatScreen] Poll attempt ${attempts}:`, {
+          status: oviyaAgent.status,
+          messagesCount: oviyaAgent.messages?.length || 0,
+          error: oviyaAgent.error || 'none'
+        });
         
-        // Check if there's an error
+        // Check for errors
         if (oviyaAgent.error) {
-          console.error('[ChatScreen] Agent error detected:', oviyaAgent.error);
+          console.error('[ChatScreen] Agent error:', oviyaAgent.error);
           throw new Error(`Agent error: ${oviyaAgent.error}`);
         }
         
-        // Check if we got a new message
-        if (currentMessageCount > initialMessageCount) {
-          const messages = oviyaAgent.messages || [];
-          lastMessage = messages[messages.length - 1];
-          
-          console.log('[ChatScreen] New message detected:', {
-            role: lastMessage?.role,
-            partsCount: lastMessage?.parts?.length,
-            status: oviyaAgent.status
-          });
-          
-          // Check if the message is from assistant and complete
-          if (lastMessage && lastMessage.role === 'assistant') {
-            // If status is ready, we're done
-            if (oviyaAgent.status === 'ready') {
-              console.log('[ChatScreen] Message complete and status ready');
-              break;
-            }
-            // Otherwise continue waiting for status to be ready
-            console.log('[ChatScreen] Message exists but waiting for ready status...');
-          }
-        }
-        
-        // If status is ready and we somehow missed the message check
-        if (oviyaAgent.status === 'ready' && currentMessageCount > initialMessageCount) {
-          const messages = oviyaAgent.messages || [];
-          lastMessage = messages[messages.length - 1];
-          if (lastMessage) {
-            console.log('[ChatScreen] Found message on ready status');
-            break;
-          }
+        // Wait until status is ready
+        if (oviyaAgent.status === 'ready') {
+          console.log('[ChatScreen] Agent ready, checking messages...');
+          break;
         }
       }
       
-      if (!lastMessage) {
-        console.error('[ChatScreen] No message after polling');
-        console.error('[ChatScreen] Final state:', {
-          initialCount: initialMessageCount,
-          finalCount: oviyaAgent.messages?.length || 0,
-          status: oviyaAgent.status,
-          error: oviyaAgent.error,
-          attempts
-        });
-        throw new Error('No response from agent: timeout or empty response');
+      // Check if we timed out
+      if (oviyaAgent.status !== 'ready') {
+        console.error('[ChatScreen] Timeout waiting for agent');
+        throw new Error('Agent timeout: still processing after 30 seconds');
       }
+      
+      // Get the last message from the agent
+      const agentMessages = oviyaAgent.messages || [];
+      console.log('[ChatScreen] Agent messages:', agentMessages.length);
+      
+      if (agentMessages.length === 0) {
+        console.error('[ChatScreen] No messages from agent');
+        throw new Error('No response from agent');
+      }
+      
+      // Find the last assistant message
+      const lastMessage = agentMessages[agentMessages.length - 1];
+      console.log('[ChatScreen] Last message:', {
+        role: lastMessage?.role,
+        partsCount: lastMessage?.parts?.length
+      });
       
       if (!lastMessage || lastMessage.role !== 'assistant') {
+        console.error('[ChatScreen] Last message is not from assistant');
         throw new Error('No assistant response found');
       }
       
-      console.log('[ChatScreen] Processing assistant message with', lastMessage.parts?.length || 0, 'parts');
-      
-      // Check if message has content
+      // Validate message has content
       const hasContent = lastMessage.parts?.some((part: any) => {
         if (part.type === 'text' && part.text && part.text.trim().length > 0) {
           return true;
@@ -474,8 +458,11 @@ function ChatScreen() {
       });
       
       if (!hasContent) {
+        console.error('[ChatScreen] Message has no content');
         throw new Error('Agent response has no content');
       }
+      
+      console.log('[ChatScreen] Processing message with', lastMessage.parts?.length || 0, 'parts');
       
       let response = '';
       const gifParts: { gifUrl?: string; url?: string; alt: string }[] = [];
