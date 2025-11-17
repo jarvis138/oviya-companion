@@ -389,17 +389,16 @@ function ChatScreen() {
         text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
       
+      console.log('[ChatScreen] Agent result keys:', result ? Object.keys(result) : 'null');
       console.log('[ChatScreen] Agent result:', JSON.stringify(result, null, 2));
       
       if (!result) {
         throw new Error('No response from agent: result is null or undefined');
       }
       
-      if (!result.messages) {
-        throw new Error('No response from agent: messages array is missing');
-      }
+      const agentMessages = oviyaAgent.messages;
       
-      if (result.messages.length === 0) {
+      if (!agentMessages || agentMessages.length === 0) {
         throw new Error('No response from agent: messages array is empty');
       }
       
@@ -408,32 +407,33 @@ function ChatScreen() {
       const bollywoodParts: { dialogue: string; movie: string; delivery: string }[] = [];
       const musicParts: { title: string; artist: string; youtubeUrl: string; reason: string }[] = [];
       
-      for (const message of result.messages) {
-        if (message.role === 'assistant') {
-          for (const part of message.parts) {
-            if (part.type === 'text') {
-              response += part.text;
-            } else if (part.type === 'tool') {
-              if (part.state === 'output-available') {
-                if (part.toolName === 'sendGif' && part.output) {
-                  gifParts.push(part.output as { gifUrl?: string; url?: string; alt: string });
-                } else if (part.toolName === 'quoteBollywood' && part.output) {
-                  bollywoodParts.push(part.output as { dialogue: string; movie: string; delivery: string });
-                } else if (part.toolName === 'recommendSong' && part.output) {
-                  musicParts.push(part.output as { title: string; artist: string; youtubeUrl: string; reason: string });
-                } else if (part.toolName === 'rememberFact') {
-                  if (part.input && typeof part.input === 'object' && 'fact' in part.input) {
-                    addToMemory((part.input as { fact: string }).fact);
-                  }
-                } else if (part.toolName === 'changeMood') {
-                  if (part.input && typeof part.input === 'object' && 'mood' in part.input) {
-                    changeMood((part.input as { mood: typeof currentMood }).mood);
-                  }
-                } else if (part.toolName === 'spotStrength') {
-                  if (part.input && typeof part.input === 'object' && 'strength' in part.input) {
-                    const strengthInput = part.input as { strength: string; evidence: string; question: string };
-                    await saveSpottedStrength(strengthInput.strength, strengthInput.evidence);
-                  }
+      const lastMessage = agentMessages[agentMessages.length - 1];
+      console.log('[ChatScreen] Processing last message:', JSON.stringify(lastMessage, null, 2));
+      
+      if (lastMessage && lastMessage.role === 'assistant') {
+        for (const part of lastMessage.parts) {
+          if (part.type === 'text') {
+            response += part.text;
+          } else if (part.type === 'tool') {
+            if (part.state === 'output-available') {
+              if (part.toolName === 'sendGif' && part.output) {
+                gifParts.push(part.output as { gifUrl?: string; url?: string; alt: string });
+              } else if (part.toolName === 'quoteBollywood' && part.output) {
+                bollywoodParts.push(part.output as { dialogue: string; movie: string; delivery: string });
+              } else if (part.toolName === 'recommendSong' && part.output) {
+                musicParts.push(part.output as { title: string; artist: string; youtubeUrl: string; reason: string });
+              } else if (part.toolName === 'rememberFact') {
+                if (part.input && typeof part.input === 'object' && 'fact' in part.input) {
+                  addToMemory((part.input as { fact: string }).fact);
+                }
+              } else if (part.toolName === 'changeMood') {
+                if (part.input && typeof part.input === 'object' && 'mood' in part.input) {
+                  changeMood((part.input as { mood: typeof currentMood }).mood);
+                }
+              } else if (part.toolName === 'spotStrength') {
+                if (part.input && typeof part.input === 'object' && 'strength' in part.input) {
+                  const strengthInput = part.input as { strength: string; evidence: string; question: string };
+                  await saveSpottedStrength(strengthInput.strength, strengthInput.evidence);
                 }
               }
             }
