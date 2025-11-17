@@ -385,18 +385,12 @@ function ChatScreen() {
       await new Promise(resolve => setTimeout(resolve, delay));
 
       console.log('[ChatScreen] Sending message to agent...');
-      const result = await oviyaAgent.sendMessage({
+      await oviyaAgent.sendMessage({
         text: `${systemPrompt}\n\nConversation History:\n${conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n')}\n\nUser: ${inputText.trim()}`,
       });
       
-      console.log('[ChatScreen] Agent result keys:', result ? Object.keys(result) : 'null');
-      console.log('[ChatScreen] Agent result:', JSON.stringify(result, null, 2));
-      
-      if (!result) {
-        throw new Error('No response from agent: result is null or undefined');
-      }
-      
       const agentMessages = oviyaAgent.messages;
+      console.log('[ChatScreen] Agent messages count:', agentMessages?.length || 0);
       
       if (!agentMessages || agentMessages.length === 0) {
         throw new Error('No response from agent: messages array is empty');
