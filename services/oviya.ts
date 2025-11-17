@@ -1,9 +1,9 @@
-import { useRorkAgent, createRorkTool, generateText } from '@rork-ai/toolkit-sdk';
+import { useRorkAgent, createRorkTool } from '@rork-ai/toolkit-sdk';
 import { z } from 'zod';
 import type { UserMemory, OviyaMood } from '../contexts/ChatContext';
 import { searchGif } from '../utils/gif';
 import { matchBollywoodMoment, BOLLYWOOD_MOMENTS } from '../constants/bollywood';
-import { getMusicRecommendation, detectMoodFromMessage, type MusicMood } from './music';
+import { getMusicRecommendation, type MusicMood } from './music';
 import type { ConversationGame } from '../utils/conversationGames';
 
 const CRISIS_KEYWORDS = [
@@ -72,8 +72,6 @@ export function applyAccent(message: string, accent: keyof typeof ACCENT_TEMPLAT
 }
 
 export function shouldUseSarcasm(userMessage: string, conversationContext: { recentMessages: string[]; emotionalWeight: 'light' | 'medium' | 'heavy' }): boolean {
-  const lower = userMessage.toLowerCase();
-  
   if (conversationContext.emotionalWeight === 'heavy') return false;
   
   const selfDeprecatingPatterns = [
@@ -351,82 +349,88 @@ Be Oviya. Be real. Be unforgettable.`;
 }
 
 export function useOviyaChat(systemPrompt?: string) {
-  const agent = useRorkAgent({
-    tools: {
-      rememberFact: createRorkTool({
-        description: "Remember an important fact about the user",
-        zodSchema: z.object({
-          fact: z.string().describe("Important fact to remember about the user"),
-        }),
+  const tools: any = {
+    rememberFact: createRorkTool({
+      description: "Remember an important fact about the user",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        fact: z.string().describe("Important fact to remember about the user"),
       }),
-      sendGif: createRorkTool({
-        description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.",
-        zodSchema: z.object({
-          searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support')"),
-          alt: z.string().describe("Alt text describing the GIF"),
-        }),
-        async execute(input) {
-          const gifUrl = await searchGif(input.searchQuery);
-          return { gifUrl, alt: input.alt };
-        },
+    }),
+    sendGif: createRorkTool({
+      description: "Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        searchQuery: z.string().describe("What emotion/reaction to search for (e.g. 'celebration', 'hug', 'laughter', 'excited', 'support')"),
+        alt: z.string().describe("Alt text describing the GIF"),
       }),
-      quoteBollywood: createRorkTool({
-        description: "Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.",
-        zodSchema: z.object({
-          context: z.string().describe("The current situation/emotion (e.g., 'before exam', 'after failure', 'celebrating', 'standing up for self')"),
-        }),
-        async execute(input) {
-          const moment = matchBollywoodMoment(input.context, input.context);
-          if (moment) {
-            return { 
-              dialogue: moment.dialogue,
-              movie: moment.movie,
-              delivery: moment.delivery,
-              found: true
-            };
-          }
-          const randomMoment = BOLLYWOOD_MOMENTS[Object.keys(BOLLYWOOD_MOMENTS)[Math.floor(Math.random() * Object.keys(BOLLYWOOD_MOMENTS).length)]];
-          return {
-            dialogue: randomMoment.dialogue,
-            movie: randomMoment.movie,
-            delivery: randomMoment.delivery,
-            found: false
-          };
-        },
+      async execute(input: any) {
+        const gifUrl = await searchGif(input.searchQuery);
+        return JSON.stringify({ gifUrl, alt: input.alt });
+      },
+    }),
+    quoteBollywood: createRorkTool({
+      description: "Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        context: z.string().describe("The current situation/emotion (e.g., 'before exam', 'after failure', 'celebrating', 'standing up for self')"),
       }),
-      recommendSong: createRorkTool({
-        description: "Recommend a song based on the user's current mood or situation. Use when they need music, want to vibe, or you sense they'd benefit from a soundtrack.",
-        zodSchema: z.object({
-          mood: z.enum(['happy', 'sad', 'energetic', 'chill', 'romantic', 'motivational', 'nostalgic', 'angry', 'peaceful']).describe("The mood that matches their current state"),
-          context: z.string().optional().describe("Additional context about why this song fits"),
-        }),
-        async execute(input) {
-          const recommendation = await getMusicRecommendation(input.mood as MusicMood, input.context);
-          return {
-            title: recommendation.title,
-            artist: recommendation.artist,
-            album: recommendation.album,
-            youtubeUrl: recommendation.youtubeUrl,
-            reason: recommendation.reason,
-          };
-        },
+      async execute(input: any) {
+        const moment = matchBollywoodMoment(input.context, input.context);
+        if (moment) {
+          return JSON.stringify({ 
+            dialogue: moment.dialogue,
+            movie: moment.movie,
+            delivery: moment.delivery,
+            found: true
+          });
+        }
+        const randomMoment = BOLLYWOOD_MOMENTS[Object.keys(BOLLYWOOD_MOMENTS)[Math.floor(Math.random() * Object.keys(BOLLYWOOD_MOMENTS).length)]];
+        return JSON.stringify({
+          dialogue: randomMoment.dialogue,
+          movie: randomMoment.movie,
+          delivery: randomMoment.delivery,
+          found: false
+        });
+      },
+    }),
+    recommendSong: createRorkTool({
+      description: "Recommend a song based on the user's current mood or situation. Use when they need music, want to vibe, or you sense they'd benefit from a soundtrack.",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        mood: z.enum(['happy', 'sad', 'energetic', 'chill', 'romantic', 'motivational', 'nostalgic', 'angry', 'peaceful']).describe("The mood that matches their current state"),
+        context: z.string().optional().describe("Additional context about why this song fits"),
       }),
-      changeMood: createRorkTool({
-        description: "Change Oviya's current mood based on conversation",
-        zodSchema: z.object({
-          mood: z.enum(['playful', 'reflective', 'energetic', 'cozy', 'caring']).describe("New mood to adopt"),
-        }),
+      async execute(input: any) {
+        const recommendation = await getMusicRecommendation(input.mood as MusicMood, input.context);
+        return JSON.stringify({
+          title: recommendation.title,
+          artist: recommendation.artist,
+          album: recommendation.album,
+          youtubeUrl: recommendation.youtubeUrl,
+          reason: recommendation.reason,
+        });
+      },
+    }),
+    changeMood: createRorkTool({
+      description: "Change Oviya's current mood based on conversation",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        mood: z.enum(['playful', 'reflective', 'energetic', 'cozy', 'caring']).describe("New mood to adopt"),
       }),
-      spotStrength: createRorkTool({
-        description: "When you notice a hidden strength or talent in the user, use this to highlight it",
-        zodSchema: z.object({
-          strength: z.string().describe("The strength/talent observed (e.g., 'clear communication', 'emotional wisdom', 'teaching ability')"),
-          evidence: z.string().describe("Specific example that demonstrates this strength"),
-          question: z.string().describe("A reflective question to help them explore this strength further"),
-        }),
+    }),
+    spotStrength: createRorkTool({
+      description: "When you notice a hidden strength or talent in the user, use this to highlight it",
+      // @ts-expect-error - Type mismatch with internal toolkit types
+      zodSchema: z.object({
+        strength: z.string().describe("The strength/talent observed (e.g., 'clear communication', 'emotional wisdom', 'teaching ability')"),
+        evidence: z.string().describe("Specific example that demonstrates this strength"),
+        question: z.string().describe("A reflective question to help them explore this strength further"),
       }),
-    },
-  });
+    }),
+  };
+
+  const agent = useRorkAgent({ tools });
   
   console.log('[useOviyaChat] Agent initialized, messages:', agent.messages?.length || 0);
   
