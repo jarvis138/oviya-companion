@@ -1,6 +1,16 @@
-const GIPHY_API_KEY = 'l3MLtCTvVv9rxfVd3T6XaEmxuZjF2quS';
-const TMDB_API_KEY = 'bb6444cf69a7114d8720ef5859d2722c';
+// Use environment variables for API keys
+const GIPHY_API_KEY = process.env.EXPO_PUBLIC_GIPHY_API_KEY || '';
+const TMDB_API_KEY = process.env.EXPO_PUBLIC_TMDB_API_KEY || '';
 const TMDB_READ_ACCESS_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJiYjY0NDRjZjY5YTcxMTRkODcyMGVmNTg1OWQyNzIyYyIsIm5iZiI6MTc2MjE5NjUyNy43MzIsInN1YiI6IjY5MDhmYzJmYWYwODI0MTQxM2RkOGI3MCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.Ub4ZHtBJJbxuddcejWETYfNjPJw66HtcuXkQ0_8hWR8';
+
+// Validate API keys are configured
+if (!GIPHY_API_KEY) {
+  console.warn('GIPHY_API_KEY not configured. GIF features may not work.');
+}
+
+if (!TMDB_API_KEY) {
+  console.warn('TMDB_API_KEY not configured. Movie features may not work.');
+}
 
 export type GiphyGif = {
   id: string;

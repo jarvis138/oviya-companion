@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const supabaseUrl = 'https://mrmebjsuiaqeentaqeya.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1ybWVianN1aWFxZWVudGFxZXlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzMTUwNDMsImV4cCI6MjA3ODg5MTA0M30.6i7En1hPLxn5qUi-4a07RqjuJovwjjH5cmbLuQprJwc';
+// Use environment variables instead of hardcoded credentials
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase environment variables. Please check your .env file.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

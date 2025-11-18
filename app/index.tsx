@@ -19,6 +19,7 @@ import MessageBubble, { TypingIndicator } from '../components/MessageBubble';
 import Colors, { getColorsForMood } from '../constants/colors';
 import { ChatProvider, useChat, type Message } from '../contexts/ChatContext';
 import { buildSystemPrompt, detectCrisis, getGreetingForMood, splitIntoChunks, useOviyaChat } from '../services/oviya';
+import { getChatResponse } from '../services/claude';
 import { searchGif } from '../utils/gif';
 import { matchBollywoodMoment } from '../constants/bollywood';
 import { getMusicRecommendation } from '../services/music';
