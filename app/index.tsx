@@ -415,7 +415,7 @@ function ChatScreen() {
             {
               name: 'rememberFact',
               description: 'Remember an important fact about the user',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   fact: { type: 'string', description: 'Important fact to remember about the user' }
@@ -426,7 +426,7 @@ function ChatScreen() {
             {
               name: 'sendGif',
               description: 'Send a GIF to express emotion or reaction (use for celebrations, support, laughter, encouragement). NEVER use during crisis or heavy vulnerability.',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   searchQuery: { type: 'string', description: 'What emotion/reaction to search for (e.g. "celebration", "hug", "laughter", "excited", "support")' },
@@ -438,7 +438,7 @@ function ChatScreen() {
             {
               name: 'quoteBollywood',
               description: 'Quote a Bollywood dialogue when the context matches. Use for encouragement, overcoming challenges, celebrating wins, or relatable moments. NEVER during crisis.',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   context: { type: 'string', description: 'The current situation/emotion (e.g., "before exam", "after failure", "celebrating", "standing up for self")' }
@@ -449,7 +449,7 @@ function ChatScreen() {
             {
               name: 'recommendSong',
               description: 'Recommend a song based on the user\'s current mood or situation. Use when they need music, want to vibe, or you sense they\'d benefit from a soundtrack.',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   mood: { type: 'string', enum: ['happy', 'sad', 'energetic', 'chill', 'romantic', 'motivational', 'nostalgic', 'angry', 'peaceful'], description: 'The mood that matches their current state' },
@@ -461,7 +461,7 @@ function ChatScreen() {
             {
               name: 'changeMood',
               description: 'Change Oviya\'s current mood based on conversation',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   mood: { type: 'string', enum: ['playful', 'reflective', 'energetic', 'cozy', 'caring'], description: 'New mood to adopt' }
@@ -472,7 +472,7 @@ function ChatScreen() {
             {
               name: 'spotStrength',
               description: 'When you notice a hidden strength or talent in the user, use this to highlight it',
-              parameters: {
+              jsonSchema: {
                 type: 'object',
                 properties: {
                   strength: { type: 'string', description: 'The strength/talent observed (e.g., "clear communication", "emotional wisdom", "teaching ability")' },
